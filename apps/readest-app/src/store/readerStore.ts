@@ -27,6 +27,7 @@ import { BookData, useBookDataStore } from './bookDataStore';
 import { useLibraryStore } from './libraryStore';
 import { clearBookProgress, getBookProgress, setBookProgress } from './readerProgressStore';
 import { uniqueId } from '@/utils/misc';
+import { emitReaderEvent, bookEventData } from '@/services/mokeBridge';
 
 interface ViewState {
   /* Unique key for each book view */
@@ -125,6 +126,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
   },
 
   clearViewState: (key: string) => {
+    // Notify host (Moke): book closed
+    emitReaderEvent('book:closed', { view_key: key });
+
     // Drop the per-book progress entry alongside the view state so the
     // standalone progress store doesn't leak across opens/closes.
     clearBookProgress(key);
@@ -303,6 +307,13 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
           },
         },
       }));
+      // 通知宿主（Moke）: 书籍已打开
+      if (isPrimary) {
+        emitReaderEvent('book:opened', {
+          ...bookEventData(book),
+          view_key: key,
+        });
+      }
     } catch (error) {
       console.error(error);
       set((state) => ({
@@ -424,6 +435,18 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         };
       });
     }
+
+    // Notify host (Moke): page / progress changed (debounced by the caller).
+    emitReaderEvent('page:changed', {
+      book_id: id,
+      view_key: key,
+      page: pageInfo.current + 1,
+      total_pages: pageInfo.total,
+      progress: progressPercentage,
+      fraction,
+      chapter: tocItem?.label ?? '',
+      section_href: tocItem?.href ?? '',
+    });
 
     // Write progress to the standalone store. This is the only setState on
     // the hot swipe path that the previous implementation routed through
