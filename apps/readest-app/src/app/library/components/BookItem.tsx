@@ -158,22 +158,23 @@ const BookItem: React.FC<BookItemProps> = ({
                 </div>
               </button>
             )}
-            {transferProgress !== null ? (
-              transferProgress === 100 ? null : (
-                <div
-                  className='radial-progress'
-                  style={
-                    {
-                      '--value': transferProgress,
-                      '--size': `${iconSize15}px`,
-                      '--thickness': '2px',
-                    } as React.CSSProperties
-                  }
-                  role='progressbar'
-                ></div>
-              )
-            ) : null
-            /* Cloud upload/download buttons removed (auth disabled).
+            {
+              transferProgress !== null ? (
+                transferProgress === 100 ? null : (
+                  <div
+                    className='radial-progress'
+                    style={
+                      {
+                        '--value': transferProgress,
+                        '--size': `${iconSize15}px`,
+                        '--thickness': '2px',
+                      } as React.CSSProperties
+                    }
+                    role='progressbar'
+                  ></div>
+                )
+              ) : null
+              /* Cloud upload/download buttons removed (auth disabled).
                TODO: Restore when talebook server sync is connected. */
             }
           </div>
