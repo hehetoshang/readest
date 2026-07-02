@@ -28,8 +28,8 @@ async function resolveInvoke() {
   return _invoke;
 }
 
-function _doEmit(event: string, data: Record<string, unknown>) {
-  resolveInvoke().then((invoke) => {
+function _doEmit(event: string, data: Record<string, unknown>): Promise<void> {
+  return resolveInvoke().then((invoke) => {
     if (!invoke) return;
     invoke('ext_reader_event', { event, data }).catch((err) => {
       console.error('[mokeBridge] invoke ext_reader_event failed:', err);
@@ -101,16 +101,19 @@ const THROTTLED_EVENTS = new Set(['page:changed']);
 
 /**
  * 向 Moke 宿主上报阅读器事件。高频事件（如 page:changed）自动节流。
+ *
+ * 返回一个 Promise，resolve() 时表示事件已送达（或尽力送达）。
+ * 调用方（尤其是关闭流程）应 await 此返回值，确保事件在窗口销毁前发出。
  */
-export async function emitReaderEvent(event: string, data: Record<string, unknown>) {
-  if (!isEmbedded()) return;
+export function emitReaderEvent(event: string, data: Record<string, unknown>): Promise<void> {
+  if (!isEmbedded()) return Promise.resolve();
 
   if (THROTTLED_EVENTS.has(event)) {
     throttledEmit(event, data);
-    return;
+    return Promise.resolve();
   }
 
-  _doEmit(event, data);
+  return _doEmit(event, data);
 }
 
 /**

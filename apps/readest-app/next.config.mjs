@@ -62,11 +62,9 @@ const nextConfig = {
     ignoreDuringBuilds: exportOutput,
   },
   experimental: {
-    // Dev caching is on by default since Next 16.1. We deliberately do NOT
-    // enable Turbopack's build cache (turbopackFileSystemCacheForBuild, beta):
-    // a build interrupted mid-compile leaves a partial cache that the next
-    // build mishandles, fanning out workers until it exhausts RAM.
     turbopackFileSystemCacheForDev: true,
+    turbopackFileSystemCacheForBuild: true,
+    turbopackMemoryLimit: 8192, // MB — use more RAM for fewer GC pauses
   },
   // Configure assetPrefix or else the server won't properly resolve your assets.
   assetPrefix: '',

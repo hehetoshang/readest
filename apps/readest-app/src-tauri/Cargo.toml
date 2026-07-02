@@ -126,3 +126,16 @@ discord-rich-presence = "1.0.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
 libc = "0.2"
+
+[profile.dev]
+codegen-units = 256
+incremental = true
+opt-level = 0
+debug = 1
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true
+panic = "abort"

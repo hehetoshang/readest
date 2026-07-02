@@ -20,7 +20,6 @@ import { tauriHandleClose, tauriHandleOnCloseWindow } from '@/utils/window';
 import { isTauriAppPlatform } from '@/services/environment';
 import { uniqueId } from '@/utils/misc';
 import { partialMD5 } from '@/utils/md5';
-import { throttle } from '@/utils/throttle';
 import { eventDispatcher } from '@/utils/event';
 import {
   closeReaderWindowOrGoToLibrary,
@@ -29,6 +28,7 @@ import {
 } from '@/utils/nav';
 import { clearDiscordPresence } from '@/utils/discord';
 import { BOOK_IDS_SEPARATOR } from '@/services/constants';
+import { emitReaderEvent } from '@/services/mokeBridge';
 import { BookDetailModal } from '@/components/metadata';
 import ShareBookDialog from '@/app/library/components/ShareBookDialog';
 import { useAuth } from '@/context/AuthContext';
@@ -61,6 +61,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   } | null>(null);
   const { user } = useAuth();
   const isInitiating = useRef(false);
+  const isClosing = useRef(false);
   const [loading, setLoading] = useState(false);
   const [errorLoading, setErrorLoading] = useState(false);
 
@@ -314,6 +315,16 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     }
     eventDispatcher.dispatch('tts-stop', { bookKey });
     await saveBookConfig(bookKey);
+
+    // Notify host (Moke): book closed. Must be awaited so the event
+    // reaches the Rust backend before the window is destroyed.
+    if (viewState?.isPrimary) {
+      await emitReaderEvent('book:closed', {
+        book_id: bookKey.split('-')[0],
+        view_key: bookKey,
+      });
+    }
+
     clearViewState(bookKey);
   };
 
@@ -326,14 +337,18 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     navigateBackToLibrary();
   };
 
-  const handleCloseBooks = throttle(async () => {
+  const handleCloseBooks = async () => {
+    // Prevent double execution (beforeunload + close-reader + onCloseRequested can fire together)
+    if (isClosing.current) return;
+    isClosing.current = true;
+
     const settings = useSettingsStore.getState().settings;
     await Promise.all(bookKeys.map(async (key) => await saveConfigAndCloseBook(key)));
     await saveSettings(envConfig, settings);
-  }, 200);
+  };
 
   const handleCloseBooksToLibrary = async () => {
-    handleCloseBooks();
+    await handleCloseBooks();
     if (isTauriAppPlatform()) {
       const currentWindow = getCurrentWindow();
       if (currentWindow.label === 'main') {
@@ -350,7 +365,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   };
 
   const handleCloseBook = async (bookKey: string) => {
-    saveConfigAndCloseBook(bookKey);
+    await saveConfigAndCloseBook(bookKey);
     if (sideBarBookKey === bookKey) {
       setSideBarBookKey(getNextBookKey(sideBarBookKey));
     }

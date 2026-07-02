@@ -126,11 +126,10 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
   },
 
   clearViewState: (key: string) => {
-    // Notify host (Moke): book closed
-    emitReaderEvent('book:closed', { view_key: key });
-
     // Drop the per-book progress entry alongside the view state so the
     // standalone progress store doesn't leak across opens/closes.
+    // Event emission (book:closed) is handled by the close handler
+    // so it can be properly awaited before window destruction.
     clearBookProgress(key);
     set((state) => {
       const viewStates = { ...state.viewStates };
