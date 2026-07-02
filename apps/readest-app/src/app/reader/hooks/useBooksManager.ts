@@ -43,6 +43,7 @@ const useBooksManager = () => {
 
   // Close a book and sync with bookKeys and URL
   const dismissBook = (bookKey: string) => {
+    useReaderStore.getState().clearViewState(bookKey);
     const updatedKeys = bookKeys.filter((key) => key !== bookKey);
     setBookKeys(updatedKeys);
     setShouldUpdateSearchParams(true);

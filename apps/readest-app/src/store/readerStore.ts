@@ -146,6 +146,13 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
     isPrimary = true,
     reload = false,
   ) => {
+    // 防重入：已经正在加载或已初始化（且不是显式 reload）时直接跳过，
+    // 避免 book:opened 事件被重复发送。
+    const viewState = get().viewStates[key];
+    if (!reload && (viewState?.loading || viewState?.inited)) {
+      return;
+    }
+
     const booksData = useBookDataStore.getState().booksData;
     const bookData = booksData[id];
     set((state) => ({
@@ -436,7 +443,7 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
       });
     }
 
-    // Notify host (Moke): page / progress changed (debounced by the caller).
+    // Notify host (Moke): page / progress changed (throttled in mokeBridge).
     emitReaderEvent('page:changed', {
       book_id: id,
       view_key: key,

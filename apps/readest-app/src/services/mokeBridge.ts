@@ -8,37 +8,109 @@
 
 import type { Book } from '@/types/book';
 
-let _invokeExtReaderEvent: ((event: string, data: Record<string, unknown>) => void) | null = null;
+// ---------------------------------------------------------------------------
+// Tauri invoke helper
+// ---------------------------------------------------------------------------
 
-async function getInvoke() {
-  if (_invokeExtReaderEvent) return _invokeExtReaderEvent;
+let _invoke: (<T>(cmd: string, args: Record<string, unknown>) => Promise<T>) | null | undefined;
+
+async function resolveInvoke() {
+  if (_invoke !== undefined) return _invoke;
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    _invokeExtReaderEvent = (event: string, data: Record<string, unknown>) => {
-      invoke('ext_reader_event', { event, data }).catch((err) => {
-        console.error('[mokeBridge] invoke ext_reader_event failed:', err);
-      });
-    };
-    console.log('[mokeBridge] Tauri invoke ready');
+    _invoke = invoke;
   } catch (err) {
+    // Don't cache failure permanently — transient import failures
+    // (bundler race, dev HMR) should be retried next time.
     console.warn('[mokeBridge] @tauri-apps/api not available:', err);
-    _invokeExtReaderEvent = () => {};
+    _invoke = null;
   }
-  return _invokeExtReaderEvent;
+  return _invoke;
 }
+
+function _doEmit(event: string, data: Record<string, unknown>) {
+  resolveInvoke().then((invoke) => {
+    if (!invoke) return;
+    invoke('ext_reader_event', { event, data }).catch((err) => {
+      console.error('[mokeBridge] invoke ext_reader_event failed:', err);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Throttle for high-frequency events (leading + trailing edge)
+// ---------------------------------------------------------------------------
+
+const THROTTLE_MS = 500;
+
+interface ThrottleEntry {
+  lastSent: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  latest: Record<string, unknown>;
+}
+
+const _throttleEntries = new Map<string, ThrottleEntry>();
+
+function throttledEmit(event: string, data: Record<string, unknown>) {
+  const now = Date.now();
+  let entry = _throttleEntries.get(event);
+
+  if (!entry || now - entry.lastSent >= THROTTLE_MS) {
+    // Leading edge: emit immediately
+    if (entry) {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.lastSent = now;
+    } else {
+      entry = { lastSent: now, timer: null, latest: data };
+      _throttleEntries.set(event, entry);
+    }
+    _doEmit(event, data);
+    return;
+  }
+
+  // Within throttle window: store latest, schedule trailing emit
+  entry.latest = data;
+  if (entry.timer) clearTimeout(entry.timer);
+  entry.timer = setTimeout(
+    () => {
+      const e = _throttleEntries.get(event);
+      if (e) {
+        e.lastSent = Date.now();
+        e.timer = null;
+        _doEmit(event, e.latest);
+      }
+    },
+    THROTTLE_MS - (now - entry.lastSent),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Embedded check
+// ---------------------------------------------------------------------------
 
 function isEmbedded(): boolean {
   return typeof window !== 'undefined' && !!(window as any).__MOKE_EMBEDDED;
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/** Events that should be throttled to avoid flooding extension backends. */
+const THROTTLED_EVENTS = new Set(['page:changed']);
+
+/**
+ * 向 Moke 宿主上报阅读器事件。高频事件（如 page:changed）自动节流。
+ */
 export async function emitReaderEvent(event: string, data: Record<string, unknown>) {
-  if (!isEmbedded()) {
-    console.log('[mokeBridge] skip event (not embedded):', event);
+  if (!isEmbedded()) return;
+
+  if (THROTTLED_EVENTS.has(event)) {
+    throttledEmit(event, data);
     return;
   }
-  console.log('[mokeBridge] emit event:', event, data);
-  const fn = await getInvoke();
-  fn(event, data);
+
+  _doEmit(event, data);
 }
 
 /**
@@ -50,5 +122,7 @@ export function bookEventData(book: Book): Record<string, unknown> {
     title: book.title ?? '',
     author: book.author ?? '',
     format: book.format ?? '',
+    cover_url: book.coverImageUrl ?? '',
+    language: book.primaryLanguage ?? '',
   };
 }
