@@ -166,6 +166,11 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
         if (globalViewSettings.isEink) {
           applyEinkMode(true);
         }
+        // ponytail: host (Moke) can force e-ink even when the on-disk setting is
+        // off (desktop WebView can't be detected via CSS media query).
+        if (typeof window !== 'undefined' && (window as any).__MOKE_EINK === true) {
+          applyEinkMode(true);
+        }
         // Initialize the app-lock gate from on-disk settings. Until
         // this runs, the gate renders nothing — guarantees the
         // library can't flash on screen before the lock screen does.

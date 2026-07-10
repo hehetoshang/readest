@@ -301,7 +301,7 @@ pub fn manage_reader_state(_app: &AppHandle) {}
 /// Each call creates a fresh `reader-<n>` window; the label prefix matches the
 /// `reader-*` capability pattern so the window inherits the right permissions.
 #[cfg(desktop)]
-pub fn open_reader_window(app: &AppHandle, file: Option<PathBuf>) -> Result<(), String> {
+pub fn open_reader_window(app: &AppHandle, file: Option<PathBuf>, eink: bool) -> Result<(), String> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static READER_SEQ: AtomicUsize = AtomicUsize::new(0);
 
@@ -320,10 +320,15 @@ pub fn open_reader_window(app: &AppHandle, file: Option<PathBuf>) -> Result<(), 
         None => "[]".to_string(),
     };
 
+    // ponytail: host (Moke) forwards its e-ink toggle so the embedded reader
+    // boots in e-ink mode on devices the CSS media query can't detect (desktop WebView).
+    let eink_js = if eink { "true" } else { "false" };
+
     let init_script = format!(
         r#"
             window.OPEN_WITH_FILES = {files_js};
             window.__MOKE_EMBEDDED = true;
+            window.__MOKE_EINK = {eink_js};
             window.addEventListener('DOMContentLoaded', function() {{
                 document.documentElement.classList.add('edge-to-edge');
             }});
@@ -365,8 +370,8 @@ pub fn open_reader_window(app: &AppHandle, file: Option<PathBuf>) -> Result<(), 
 /// now opens an in-process reader window instead of spawning a separate exe.
 #[cfg(desktop)]
 #[tauri::command]
-async fn open_reader(app: AppHandle, file_path: String) -> Result<(), String> {
-    open_reader_window(&app, Some(PathBuf::from(file_path)))
+async fn open_reader(app: AppHandle, file_path: String, eink: bool) -> Result<(), String> {
+    open_reader_window(&app, Some(PathBuf::from(file_path)), eink)
 }
 
 /// The full app-level invoke handler for the reader backend, exposed so an
