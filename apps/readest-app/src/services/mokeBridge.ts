@@ -31,7 +31,7 @@ async function resolveInvoke() {
 function _doEmit(event: string, data: Record<string, unknown>): Promise<void> {
   return resolveInvoke().then((invoke) => {
     if (!invoke) return;
-    invoke('ext_reader_event', { event, data }).catch((err) => {
+    invoke('ext_reader_event', { event, data: withMokeContext(data) }).catch((err) => {
       console.error('[mokeBridge] invoke ext_reader_event failed:', err);
     });
   });
@@ -90,6 +90,18 @@ function throttledEmit(event: string, data: Record<string, unknown>) {
 
 function isEmbedded(): boolean {
   return typeof window !== 'undefined' && !!(window as any).__MOKE_EMBEDDED;
+}
+
+function withMokeContext(data: Record<string, unknown>): Record<string, unknown> {
+  if (typeof window === 'undefined') return data;
+
+  const mokeBookId = (window as any).__MOKE_BOOK_ID;
+  if (!mokeBookId || data.moke_book_id) return data;
+
+  return {
+    ...data,
+    moke_book_id: String(mokeBookId),
+  };
 }
 
 // ---------------------------------------------------------------------------

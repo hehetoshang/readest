@@ -301,7 +301,13 @@ pub fn manage_reader_state(_app: &AppHandle) {}
 /// Each call creates a fresh `reader-<n>` window; the label prefix matches the
 /// `reader-*` capability pattern so the window inherits the right permissions.
 #[cfg(desktop)]
-pub fn open_reader_window(app: &AppHandle, file: Option<PathBuf>, eink: bool) -> Result<(), String> {
+pub fn open_reader_window(
+    app: &AppHandle,
+    file: Option<PathBuf>,
+    eink: bool,
+    moke_book_id: Option<String>,
+    restore_progress: Option<serde_json::Value>,
+) -> Result<(), String> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static READER_SEQ: AtomicUsize = AtomicUsize::new(0);
 
@@ -323,12 +329,16 @@ pub fn open_reader_window(app: &AppHandle, file: Option<PathBuf>, eink: bool) ->
     // ponytail: host (Moke) forwards its e-ink toggle so the embedded reader
     // boots in e-ink mode on devices the CSS media query can't detect (desktop WebView).
     let eink_js = if eink { "true" } else { "false" };
+    let moke_book_id_js = serde_json::to_string(&moke_book_id).map_err(|e| e.to_string())?;
+    let restore_progress_js = serde_json::to_string(&restore_progress).map_err(|e| e.to_string())?;
 
     let init_script = format!(
         r#"
             window.OPEN_WITH_FILES = {files_js};
             window.__MOKE_EMBEDDED = true;
             window.__MOKE_EINK = {eink_js};
+            window.__MOKE_BOOK_ID = {moke_book_id_js};
+            window.__MOKE_RESTORE_PROGRESS = {restore_progress_js};
             window.addEventListener('DOMContentLoaded', function() {{
                 document.documentElement.classList.add('edge-to-edge');
             }});
@@ -370,8 +380,20 @@ pub fn open_reader_window(app: &AppHandle, file: Option<PathBuf>, eink: bool) ->
 /// now opens an in-process reader window instead of spawning a separate exe.
 #[cfg(desktop)]
 #[tauri::command]
-async fn open_reader(app: AppHandle, file_path: String, eink: bool) -> Result<(), String> {
-    open_reader_window(&app, Some(PathBuf::from(file_path)), eink)
+async fn open_reader(
+    app: AppHandle,
+    file_path: String,
+    eink: bool,
+    moke_book_id: Option<String>,
+    restore_progress: Option<serde_json::Value>,
+) -> Result<(), String> {
+    open_reader_window(
+        &app,
+        Some(PathBuf::from(file_path)),
+        eink,
+        moke_book_id,
+        restore_progress,
+    )
 }
 
 /// The full app-level invoke handler for the reader backend, exposed so an

@@ -9,6 +9,7 @@
  * Supported commands:
  * - go_to_fraction  { fraction: number }
  * - go_to_href      { href: string }
+ * - go_to_location  { location: string }
  * - next_page
  * - prev_page
  * - get_position
@@ -23,6 +24,7 @@ interface CommandPayload {
   command: string;
   fraction?: number;
   href?: string;
+  location?: string;
 }
 
 function isEmbedded(): boolean {
@@ -55,6 +57,15 @@ function executeCommand(payload: CommandPayload, bookKeys: string[]): unknown {
       if (!view) throw new Error('No active reader view');
       view.goTo(payload.href);
       return { href: payload.href };
+    }
+
+    case 'go_to_location': {
+      if (typeof payload.location !== 'string') {
+        throw new Error('go_to_location requires a location string');
+      }
+      if (!view) throw new Error('No active reader view');
+      view.goTo(payload.location);
+      return { location: payload.location };
     }
 
     case 'next_page': {
@@ -103,6 +114,7 @@ function reportResult(payload: CommandPayload, success: boolean, resultOrError: 
 
 export function useMokeCommandListener(bookKeys: string[]) {
   const bookKeysRef = useRef(bookKeys);
+  const restoredRef = useRef(false);
   bookKeysRef.current = bookKeys;
 
   useEffect(() => {
@@ -137,4 +149,52 @@ export function useMokeCommandListener(bookKeys: string[]) {
       unlisten?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isEmbedded() || restoredRef.current || bookKeys.length === 0) return;
+
+    const restoreProgress = (window as any).__MOKE_RESTORE_PROGRESS;
+    if (!restoreProgress || typeof restoreProgress !== 'object') return;
+
+    const location = typeof restoreProgress.location === 'string' ? restoreProgress.location : '';
+    const href =
+      typeof restoreProgress.section_href === 'string' ? restoreProgress.section_href : '';
+    const fraction = typeof restoreProgress.fraction === 'number' ? restoreProgress.fraction : null;
+    const command: CommandPayload | null = location
+      ? { command: 'go_to_location', location }
+      : href
+        ? { command: 'go_to_href', href }
+        : fraction !== null
+          ? { command: 'go_to_fraction', fraction }
+          : null;
+
+    if (!command) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    restoredRef.current = true;
+
+    const tryRestore = () => {
+      if (cancelled) return;
+      attempts += 1;
+
+      try {
+        executeCommand(command, bookKeysRef.current);
+        reportResult({ ...command, request_id: 'moke-restore-progress' }, true, { restored: true });
+      } catch (err) {
+        if (attempts < 20) {
+          window.setTimeout(tryRestore, 250);
+          return;
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        reportResult({ ...command, request_id: 'moke-restore-progress' }, false, message);
+      }
+    };
+
+    window.setTimeout(tryRestore, 250);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bookKeys]);
 }

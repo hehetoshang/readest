@@ -446,6 +446,7 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
     emitReaderEvent('page:changed', {
       book_id: id,
       view_key: key,
+      location,
       page: pageInfo.current + 1,
       total_pages: pageInfo.total,
       progress: progressPercentage,
