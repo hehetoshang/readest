@@ -5,6 +5,10 @@ import { getCurrent } from '@tauri-apps/plugin-deep-link';
 declare global {
   interface Window {
     OPEN_WITH_FILES?: string[] | null;
+    __MOKE_EMBEDDED?: boolean;
+    __MOKE_EINK?: boolean;
+    __MOKE_BOOK_ID?: string | null;
+    __MOKE_RESTORE_PROGRESS?: unknown;
   }
 }
 
