@@ -360,7 +360,10 @@ pub fn open_reader_window(
         let result = WebviewWindowBuilder::new(
             &app_main,
             label,
-            WebviewUrl::App("readest/index.html".into()),
+            // The embedded frontend is exported under `/readest`, and its
+            // actual reader route is `reader.html`. Loading `index.html`
+            // opens Readest's library/root route instead of the reader.
+            WebviewUrl::App("readest/reader.html".into()),
         )
         .title("Readest")
         .inner_size(1280.0, 800.0)

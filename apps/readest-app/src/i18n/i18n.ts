@@ -7,6 +7,9 @@ import { initReactI18next } from 'react-i18next';
 const SUPPORTED_LNGS = ['en', ...translatableLngs];
 
 const isBrowser = typeof window !== 'undefined';
+// Moke ships Readest beneath `/readest`; i18next's absolute URL would
+// otherwise escape that prefix and request the host app's nonexistent locales.
+const publicBasePath = process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'tauri' ? '/readest' : '';
 
 const initI18n = async () => {
   if (isBrowser) {
@@ -33,7 +36,7 @@ const initI18n = async () => {
       defaultNS: 'translation',
       ...(isBrowser && {
         backend: {
-          loadPath: '/locales/{{lng}}/{{ns}}.json',
+          loadPath: `${publicBasePath}/locales/{{lng}}/{{ns}}.json`,
         },
       }),
       detection: {

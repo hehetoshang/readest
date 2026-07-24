@@ -15,6 +15,9 @@ const description =
   'and note-taking, and support for multiple book views. ' +
   'Perfect for deep reading, analysis, and understanding. Explore now!';
 const previewImage = 'https://cdn.readest.com/images/open_graph_preview_read_now.png';
+// In the embedded Tauri export all Readest public files live under
+// `/readest`, rather than at the Moke app root.
+const publicBasePath = process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'tauri' ? '/readest' : '';
 
 export const metadata: Metadata = {
   metadataBase: new URL(url),
@@ -24,7 +27,7 @@ export const metadata: Metadata = {
   },
   description,
   generator: 'Next.js',
-  manifest: '/manifest.json',
+  manifest: `${publicBasePath}/manifest.json`,
   keywords: ['epub', 'pdf', 'ebook', 'reader', 'readest', 'pwa'],
   authors: [
     {
@@ -33,8 +36,8 @@ export const metadata: Metadata = {
     },
   ],
   icons: {
-    icon: [{ url: '/icon.png' }, { url: '/favicon.ico' }],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
+    icon: [{ url: `${publicBasePath}/icon.png` }, { url: `${publicBasePath}/favicon.ico` }],
+    apple: [{ url: `${publicBasePath}/apple-touch-icon.png`, sizes: '180x180' }],
   },
   appleWebApp: {
     capable: true,
