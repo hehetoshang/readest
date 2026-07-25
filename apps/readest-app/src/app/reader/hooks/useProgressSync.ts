@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { useEnv } from '@/context/EnvContext';
 import { useSync } from '@/hooks/useSync';
 import { BookConfig, FIXED_LAYOUT_FORMATS } from '@/types/book';
@@ -24,6 +25,7 @@ const PULL_RETRY_DELAYS_MS = [1500, 4000, 10000];
 
 export const useProgressSync = (bookKey: string) => {
   const _ = useTranslation();
+  const { user } = useAuth();
   // Per-field selectors avoid subscribing this hook's host (FoliateViewer)
   // to the WHOLE bookDataStore — saveConfig writes booksData on every
   // throttled save and would otherwise re-render the entire reader subtree.
@@ -38,9 +40,6 @@ export const useProgressSync = (bookKey: string) => {
   const { envConfig } = useEnv();
   const { settings } = useSettingsStore();
   const { syncedConfigs, syncConfigs } = useSync(bookKey);
-  // TODO: When talebook server auth is connected, restore user check from AuthContext.
-  // For now always allow local progress tracking (sync calls are no-ops).
-  // const { user } = useAuth();
   // Reactive subscription on this book's progress so the effects below
   // (auto-push debounce, initial pull) re-run when the user turns the
   // page. Reads from readerProgressStore, not readerStore — see
@@ -62,9 +61,7 @@ export const useProgressSync = (bookKey: string) => {
 
   const pushConfig = async (bookKey: string, config: BookConfig | null) => {
     const book = getBookData(bookKey)?.book;
-    if (!config || !book) return;
-    // TODO: When talebook server sync is connected, restore user check:
-    // if (!user) return;
+    if (!user || !config || !book) return;
     const bookHash = book.hash;
     const metaHash = book.metaHash;
     const newConfig = { ...config, bookHash, metaHash };
@@ -82,9 +79,7 @@ export const useProgressSync = (bookKey: string) => {
 
   const pullConfig = async (bookKey: string) => {
     const book = getBookData(bookKey)?.book;
-    // TODO: When talebook server sync is connected, restore user check:
-    // if (!user || !book) return;
-    if (!book) return;
+    if (!user || !book) return;
     const bookHash = bookKey.split('-')[0]!;
     const metaHash = book.metaHash;
     await syncConfigs([], bookHash, metaHash, 'pull');
@@ -98,6 +93,12 @@ export const useProgressSync = (bookKey: string) => {
   // user's auto-push isn't blocked by a server outage. Re-entry while a
   // pull is in flight or a retry timer is pending is a no-op.
   const pullWithRetry = useCallback(async () => {
+    // Moke deliberately has no Readest cloud account. Mark the local gate as
+    // ready instead of issuing an unauthenticated request and retrying it.
+    if (!user) {
+      configPulled.current = true;
+      return;
+    }
     if (configPulled.current) return;
     if (pullInFlight.current) return;
     if (pullRetryTimer.current !== null) return;
@@ -122,7 +123,7 @@ export const useProgressSync = (bookKey: string) => {
       if (!configPulled.current) pullWithRetry();
     }, delay);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookKey]);
+  }, [bookKey, user]);
 
   const syncConfig = async () => {
     if (!configPulled.current) {
@@ -192,9 +193,7 @@ export const useProgressSync = (bookKey: string) => {
 
   // Push: auto-push progress when progress changes with a debounce
   useEffect(() => {
-    // TODO: When talebook server sync is connected, restore user check:
-    // if (!progress?.location || !user) return;
-    if (!progress?.location) return;
+    if (!progress?.location || !user) return;
     handleAutoSync();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress?.location]);

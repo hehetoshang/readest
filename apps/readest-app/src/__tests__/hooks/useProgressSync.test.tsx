@@ -34,7 +34,7 @@ const h = vi.hoisted(() => {
     book,
     config,
     libraryBook,
-    user: { id: 'u1' },
+    user: { id: 'u1' } as { id: string } | null,
     syncConfigsMock: vi.fn(async () => {}),
     syncBooksMock: vi.fn(async () => {}),
     saveConfigMock: vi.fn(async () => {}),
@@ -151,6 +151,7 @@ const flushAutoSync = async () => {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  h.user = { id: 'u1' };
   h.syncConfigsMock.mockClear();
   h.syncBooksMock.mockClear();
   h.saveConfigMock.mockClear();
@@ -187,6 +188,16 @@ const pushCallCount = () =>
   h.syncConfigsMock.mock.calls.filter((c) => (c as unknown[])[3] === 'push').length;
 
 describe('useProgressSync', () => {
+  test('skips cloud sync entirely when the reader has no authenticated user', async () => {
+    h.user = null;
+    renderHook(() => useProgressSync('h1-view1'));
+
+    await advance(20000);
+
+    expect(pullCallCount()).toBe(0);
+    expect(pushCallCount()).toBe(0);
+  });
+
   test('auto-sync push only hits the configs lane; the server piggybacks books.progress', async () => {
     // Issue #4198 used to be fixed by a second syncBooks call from the
     // reader so that other devices' library pull-to-refresh would see fresh
