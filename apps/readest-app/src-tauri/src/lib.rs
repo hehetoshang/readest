@@ -282,6 +282,17 @@ pub fn register_reader_plugins(
         .plugin(tauri_plugin_native_tts::init())
 }
 
+/// Register reader URI protocols on an embedding host's Tauri builder.
+///
+/// Android uses `rangefile` for local ebook byte-range reads because the
+/// WebView corrupts ordinary asset-protocol range responses. Hosts embedding
+/// Readest must register it just like the standalone application does.
+pub fn register_reader_protocols(
+    builder: tauri::Builder<tauri::Wry>,
+) -> tauri::Builder<tauri::Wry> {
+    builder.register_asynchronous_uri_scheme_protocol(range_file::SCHEME, range_file::handle)
+}
+
 /// Manage reader-related app state (currently the Discord Rich Presence
 /// client). Call once from the host app's `setup`.
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]

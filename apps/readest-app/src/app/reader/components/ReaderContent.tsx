@@ -42,6 +42,14 @@ import Notebook from './notebook/Notebook';
 import BooksGrid from './BooksGrid';
 import SettingsDialog from '@/components/settings/SettingsDialog';
 
+// Moke mobile has a single WebView, so it navigates that WebView to the
+// bundled reader with the downloaded book path in the query string. Desktop
+// reader windows receive the same path through OPEN_WITH_FILES instead.
+const getMokeEmbeddedFiles = () => {
+  if (typeof window === 'undefined' || !window.__MOKE_EMBEDDED) return [];
+  return new URLSearchParams(window.location.search).getAll('file').filter(Boolean);
+};
+
 const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ ids, settings }) => {
   const _ = useTranslation();
   const router = useRouter();
@@ -62,6 +70,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   const { user } = useAuth();
   const isInitiating = useRef(false);
   const isClosing = useRef(false);
+  const hasHandledOpenFiles = useRef(false);
   const [loading, setLoading] = useState(false);
   const [errorLoading, setErrorLoading] = useState(false);
 
@@ -76,11 +85,12 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     const pathname = window.location.pathname;
     const bookIds = ids || searchParams?.get('ids') || pathname.split('/reader/')[1] || '';
     const initialIds = bookIds.split(BOOK_IDS_SEPARATOR).filter(Boolean);
+    const mokeFiles = getMokeEmbeddedFiles();
 
-    // No ids provided — check if the window was opened with a file path
-    // (set by open_reader_window via window.OPEN_WITH_FILES initialization script).
+    // No ids provided — check if the window was opened with a file path,
+    // either from the desktop window bootstrap or Moke mobile's URL.
     // Dispatching is deferred to a separate effect that waits for appService.
-    if (initialIds.length === 0 && window.OPEN_WITH_FILES?.length) {
+    if (initialIds.length === 0 && (window.OPEN_WITH_FILES?.length || mokeFiles.length)) {
       return;
     }
 
@@ -113,8 +123,9 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   }, []);
 
   // When the reader window is opened with a file path via open_reader_window
-  // (Rust sets window.OPEN_WITH_FILES before React boots), load the file as a
-  // transient book directly in THIS window.
+  // (Rust sets window.OPEN_WITH_FILES before React boots), or Moke mobile puts
+  // the path in the URL, load the file as a transient book directly in THIS
+  // window.
   //
   // We can't reuse the usual app-incoming-url → useOpenWithBooks path: that
   // hook early-returns for any /reader pathname (it assumes a reader is already
@@ -125,8 +136,13 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   // ourselves, mirroring both openTransient and the init effect.
   useEffect(() => {
     if (!appService) return;
-    if (!window.OPEN_WITH_FILES?.length) return;
-    const files = window.OPEN_WITH_FILES;
+    if (hasHandledOpenFiles.current) return;
+
+    const mokeFiles = getMokeEmbeddedFiles();
+    const files = window.OPEN_WITH_FILES?.length ? window.OPEN_WITH_FILES : mokeFiles;
+    if (!files?.length) return;
+
+    hasHandledOpenFiles.current = true;
     window.OPEN_WITH_FILES = null;
 
     const failToOpen = () => {
@@ -386,7 +402,13 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     }
   };
 
-  if (!bookKeys || bookKeys.length === 0) return null;
+  if (!bookKeys || bookKeys.length === 0) {
+    return (
+      <div className='hero hero-content full-height'>
+        <Spinner loading={true} />
+      </div>
+    );
+  }
   const bookData = getBookData(bookKeys[0]!);
   const viewSettings = getViewSettings(bookKeys[0]!);
   if (!bookData || !bookData.book || !bookData.bookDoc || !viewSettings) {
