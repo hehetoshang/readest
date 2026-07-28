@@ -159,6 +159,14 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     };
 
     const openTransientFiles = async () => {
+      // Files selected through Readest's own picker receive this grant in
+      // nativeAppService.selectFiles(). Moke hands its AppData file to the
+      // embedded reader through the URL instead, so iOS has not seen the path
+      // before the first NativeFile.open(). Explicitly grant that exact file
+      // before importing it; this is a no-op on Android and harmless on
+      // desktop, where the static AppData scope already covers the file.
+      await appService.allowPathsInScopes?.(files, false);
+
       // Load the real library from disk before building any transient entry, so
       // initViewState's getBookByHash can resolve the book and an empty-store
       // save can't wipe library.json (same rationale as useOpenWithBooks).
