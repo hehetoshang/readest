@@ -1,12 +1,11 @@
 import clsx from 'clsx';
 import React, { useEffect } from 'react';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { BiMoon, BiSun } from 'react-icons/bi';
 import { TbSunMoon } from 'react-icons/tb';
-import { MdZoomOut, MdZoomIn, MdCheck, MdInfoOutline } from 'react-icons/md';
+import { MdZoomOut, MdZoomIn, MdCheck } from 'react-icons/md';
 import { MdRemove, MdAdd, MdContrast } from 'react-icons/md';
-import { MdSync, MdSyncProblem } from 'react-icons/md';
+// import { MdInfoOutline, MdSync, MdSyncProblem } from 'react-icons/md';
 import { IoMdExpand } from 'react-icons/io';
 import { IoShareOutline } from 'react-icons/io5';
 import { TbArrowAutofitWidth } from 'react-icons/tb';
@@ -21,18 +20,18 @@ import {
   CONTRAST_STEP,
 } from '@/services/constants';
 import { useEnv } from '@/context/EnvContext';
-import { useAuth } from '@/context/AuthContext';
+// import { useAuth } from '@/context/AuthContext';
 import { useThemeStore } from '@/store/themeStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getStyles } from '@/utils/style';
-import { navigateToLogin as _navigateToLogin } from '@/utils/nav';
+// import { navigateToLogin as _navigateToLogin } from '@/utils/nav';
 import { getScrollGapAttr } from '@/utils/webtoon';
 import { eventDispatcher } from '@/utils/event';
 import { getMaxInlineSize } from '@/utils/config';
-import dayjs from 'dayjs';
+// import dayjs from 'dayjs';
 import { saveViewSettings } from '@/helpers/settings';
 import { tauriHandleToggleFullScreen } from '@/utils/window';
 import MenuItem from '@/components/MenuItem';
@@ -47,19 +46,21 @@ interface ViewMenuProps {
 const ViewMenu: React.FC<ViewMenuProps> = ({
   bookKey,
   setIsDropdownOpen,
-  onShowMetaHashDialog,
+  // onShowMetaHashDialog,
 }) => {
   const _ = useTranslation();
-  const router = useRouter();
-  const { user } = useAuth();
+  // const router = useRouter();
+  // const { user } = useAuth();
   const { envConfig, appService } = useEnv();
-  const { getConfig, getBookData } = useBookDataStore();
+  const { getBookData } = useBookDataStore();
+  // const { getConfig } = useBookDataStore();
   const { setSettingsDialogOpen, setSettingsDialogBookKey } = useSettingsStore();
-  const { getView, getViewSettings, getViewState, getProgress, setViewSettings } = useReaderStore();
-  const config = getConfig(bookKey)!;
+  const { getView, getViewSettings, getProgress, setViewSettings } = useReaderStore();
+  // const { getViewState } = useReaderStore();
+  // const config = getConfig(bookKey)!;
   const bookData = getBookData(bookKey)!;
   const viewSettings = getViewSettings(bookKey)!;
-  const viewState = getViewState(bookKey);
+  // const viewState = getViewState(bookKey);
 
   const { themeMode, isDarkMode, setThemeMode } = useThemeStore();
   const [isScrolledMode, setScrolledMode] = useState(viewSettings!.scrolled);
@@ -109,10 +110,10 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
     setIsDropdownOpen?.(false);
   };
 
-  const handleSync = () => {
-    eventDispatcher.dispatch('sync-book-progress', { bookKey });
-    setIsDropdownOpen?.(false);
-  };
+  // const handleSync = () => {
+  //   eventDispatcher.dispatch('sync-book-progress', { bookKey });
+  //   setIsDropdownOpen?.(false);
+  // };
 
   const handleStartRSVP = () => {
     setIsDropdownOpen?.(false);
@@ -217,12 +218,12 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keepCoverSpread]);
 
-  const lastSyncTime = Math.max(
-    config?.lastSyncedAtConfig || 0,
-    config?.lastSyncedAtNotes || 0,
-    config?.lastPushedAtConfig || 0,
-    config?.lastPushedAtNotes || 0,
-  );
+  // const lastSyncTime = Math.max(
+  //   config?.lastSyncedAtConfig || 0,
+  //   config?.lastSyncedAtNotes || 0,
+  //   config?.lastPushedAtConfig || 0,
+  //   config?.lastPushedAtNotes || 0,
+  // );
 
   return (
     <Menu
@@ -397,6 +398,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
 
       <hr aria-hidden='true' className='border-base-300 my-1' />
 
+      {/* Sync UI hidden in Moke; keep the original implementation for future restoration.
       <MenuItem
         label={
           !user
@@ -426,6 +428,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
       />
 
       <hr aria-hidden='true' className='border-base-300 my-1' />
+      */}
 
       {appService?.hasWindow && <MenuItem label={_('Fullscreen')} onClick={handleFullScreen} />}
       <MenuItem
