@@ -76,7 +76,8 @@ const selectFileTauri = async (
   _: (key: string) => string,
 ): Promise<SelectedFile[]> => {
   // Android's SAF picker filters by MIME type. Niche/custom extensions
-  // (e.g. ".mrexpt" from Moon+ Reader) have no registered MIME and would
+  // (e.g. ".mrexpt" from Moon+ Reader) and font files on some providers
+  // have no registered MIME and would
   // appear greyed-out, so for those cases we ask the native side for an
   // unfiltered picker and re-apply the extension whitelist on the
   // resulting paths below. We extend the same treatment to 'generic'
@@ -85,7 +86,10 @@ const selectFileTauri = async (
   const noFilter =
     appService?.isIOSApp ||
     (appService?.isAndroidApp &&
-      (options.type === 'books' || options.type === 'dictionaries' || options.type === 'generic'));
+      (options.type === 'books' ||
+        options.type === 'dictionaries' ||
+        options.type === 'fonts' ||
+        options.type === 'generic'));
   const exts = noFilter ? [] : options.extensions || [];
   const title = options.dialogTitle || _('Select Files');
   const paths = (await appService?.selectFiles(_(title), exts)) || [];

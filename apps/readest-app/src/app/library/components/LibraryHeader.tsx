@@ -2,9 +2,14 @@ import clsx from 'clsx';
 import React, { useCallback, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FaSearch } from 'react-icons/fa';
-import { PiPlus } from 'react-icons/pi';
-import { PiSelectionAll, PiSelectionAllFill } from 'react-icons/pi';
-import { PiDotsThreeCircle } from 'react-icons/pi';
+import {
+  PiBooks,
+  PiDotsThreeCircle,
+  PiDownloadSimple,
+  PiPlus,
+  PiSelectionAll,
+  PiSelectionAllFill,
+} from 'react-icons/pi';
 import { MdOutlineMenu } from 'react-icons/md';
 import { IoMdCloseCircle } from 'react-icons/io';
 
@@ -16,13 +21,16 @@ import { useTrafficLight } from '@/hooks/useTrafficLight';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { debounce } from '@/utils/debounce';
 import useShortcuts from '@/hooks/useShortcuts';
-import WindowButtons from '@/components/WindowButtons';
+// Moke embedded reader: keep the native window controls disabled on the library home page.
+// import WindowButtons from '@/components/WindowButtons';
 import Dropdown from '@/components/Dropdown';
 import SettingsMenu from './SettingsMenu';
 import ImportMenu from './ImportMenu';
 import ViewMenu from './ViewMenu';
 
 interface LibraryHeaderProps {
+  activeTab: 'library' | 'moke-downloads';
+  showMokeDownloadsTab: boolean;
   isSelectMode: boolean;
   isSelectAll: boolean;
   onPullLibrary: () => void;
@@ -33,9 +41,12 @@ interface LibraryHeaderProps {
   onToggleSelectMode: () => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  onTabChange: (tab: 'library' | 'moke-downloads') => void;
 }
 
 const LibraryHeader: React.FC<LibraryHeaderProps> = ({
+  activeTab,
+  showMokeDownloadsTab,
   isSelectMode,
   isSelectAll,
   onPullLibrary,
@@ -46,6 +57,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
   onToggleSelectMode,
   onSelectAll,
   onDeselectAll,
+  onTabChange,
 }) => {
   const _ = useTranslation();
   const router = useRouter();
@@ -108,8 +120,8 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
           : '0px',
       }}
     >
-      <div className='flex w-full items-center justify-between space-x-6 sm:space-x-12'>
-        <div className='exclude-title-bar-mousedown relative flex w-full items-center pl-4'>
+      <div className='flex w-full items-center'>
+        <div className='exclude-title-bar-mousedown relative flex min-w-0 flex-grow items-center pl-4'>
           <div className='relative flex h-9 w-full items-center sm:h-7'>
             <span className='text-base-content/50 absolute ps-3'>
               <FaSearch className='h-4 w-4' />
@@ -150,22 +162,24 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
               </button>
             )}
             <span className='bg-base-content/50 mx-2 h-4 w-[0.5px]'></span>
-            <Dropdown
-              label={_('Import Books')}
-              className={clsx(
-                'exclude-title-bar-mousedown dropdown-bottom dropdown-center cursor-pointer',
-              )}
-              buttonClassName='p-0 h-6 min-h-6 w-6 flex touch-target items-center justify-center !bg-transparent'
-              toggleButton={<PiPlus role='none' className='m-0.5 h-5 w-5' />}
-            >
-              <ImportMenu
-                onImportBooksFromFiles={onImportBooksFromFiles}
-                onImportBooksFromDirectory={onImportBooksFromDirectory}
-                onImportBookFromUrl={onImportBookFromUrl}
-                onOpenCatalogManager={onOpenCatalogManager}
-              />
-            </Dropdown>
-            {isMobile ? null : (
+            {activeTab === 'library' && (
+              <Dropdown
+                label={_('Import Books')}
+                className={clsx(
+                  'exclude-title-bar-mousedown dropdown-bottom dropdown-center cursor-pointer',
+                )}
+                buttonClassName='p-0 h-6 min-h-6 w-6 flex touch-target items-center justify-center !bg-transparent'
+                toggleButton={<PiPlus role='none' className='m-0.5 h-5 w-5' />}
+              >
+                <ImportMenu
+                  onImportBooksFromFiles={onImportBooksFromFiles}
+                  onImportBooksFromDirectory={onImportBooksFromDirectory}
+                  onImportBookFromUrl={onImportBookFromUrl}
+                  onOpenCatalogManager={onOpenCatalogManager}
+                />
+              </Dropdown>
+            )}
+            {activeTab === 'library' && !isMobile && (
               <button
                 onClick={onToggleSelectMode}
                 aria-label={_('Select Books')}
@@ -181,41 +195,72 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
             )}
           </div>
         </div>
-        {isSelectMode ? (
-          <div
-            className={clsx(
-              'flex h-full items-center',
-              'w-max-[72px] w-min-[72px] sm:w-max-[80px] sm:w-min-[80px]',
-            )}
-          >
-            <button
-              onClick={isSelectAll ? onDeselectAll : onSelectAll}
-              className='btn btn-ghost text-base-content/85 h-8 min-h-8 w-[72px] p-0 sm:w-[80px]'
-              aria-label={isSelectAll ? _('Deselect') : _('Select All')}
+        <div className='ml-2 flex shrink-0 items-center gap-x-2 sm:gap-x-4'>
+          {showMokeDownloadsTab && (
+            <div className='tabs tabs-boxed shrink-0 bg-base-300/45 p-0.5' role='tablist'>
+              <button
+                type='button'
+                role='tab'
+                aria-selected={activeTab === 'library'}
+                aria-label={_('Library')}
+                title={_('Library')}
+                className={clsx('tab h-7 min-h-7 w-7 p-0', activeTab === 'library' && 'tab-active')}
+                onClick={() => onTabChange('library')}
+              >
+                <PiBooks className='size-4' />
+              </button>
+              <button
+                type='button'
+                role='tab'
+                aria-selected={activeTab === 'moke-downloads'}
+                aria-label={_('Moke Downloads')}
+                title={_('Moke Downloads')}
+                className={clsx(
+                  'tab h-7 min-h-7 w-7 p-0',
+                  activeTab === 'moke-downloads' && 'tab-active',
+                )}
+                onClick={() => onTabChange('moke-downloads')}
+              >
+                <PiDownloadSimple className='size-4' />
+              </button>
+            </div>
+          )}
+          {isSelectMode ? (
+            <div
+              className={clsx(
+                'flex h-full items-center',
+                'w-max-[72px] w-min-[72px] sm:w-max-[80px] sm:w-min-[80px]',
+              )}
             >
-              <span className='font-sans text-base font-normal sm:text-sm whitespace-nowrap truncate'>
-                {isSelectAll ? _('Deselect') : _('Select All')}
-              </span>
-            </button>
-          </div>
-        ) : (
-          <div className='flex h-full items-center gap-x-2 sm:gap-x-4'>
-            <Dropdown
-              label={_('View Menu')}
-              className='exclude-title-bar-mousedown dropdown-bottom dropdown-end'
-              buttonClassName='btn btn-ghost h-8 min-h-8 w-8 p-0'
-              toggleButton={<PiDotsThreeCircle role='none' size={iconSize18} />}
-            >
-              <ViewMenu />
-            </Dropdown>
-            <Dropdown
-              label={_('Settings Menu')}
-              className='exclude-title-bar-mousedown dropdown-bottom dropdown-end'
-              buttonClassName='btn btn-ghost h-8 min-h-8 w-8 p-0'
-              toggleButton={<MdOutlineMenu role='none' size={iconSize18} />}
-            >
-              <SettingsMenu onPullLibrary={onPullLibrary} />
-            </Dropdown>
+              <button
+                onClick={isSelectAll ? onDeselectAll : onSelectAll}
+                className='btn btn-ghost text-base-content/85 h-8 min-h-8 w-[72px] p-0 sm:w-[80px]'
+                aria-label={isSelectAll ? _('Deselect') : _('Select All')}
+              >
+                <span className='font-sans text-base font-normal sm:text-sm whitespace-nowrap truncate'>
+                  {isSelectAll ? _('Deselect') : _('Select All')}
+                </span>
+              </button>
+            </div>
+          ) : (
+            <div className='flex h-full items-center gap-x-2 sm:gap-x-4'>
+              <Dropdown
+                label={_('View Menu')}
+                className='exclude-title-bar-mousedown dropdown-bottom dropdown-end'
+                buttonClassName='btn btn-ghost h-8 min-h-8 w-8 p-0'
+                toggleButton={<PiDotsThreeCircle role='none' size={iconSize18} />}
+              >
+                <ViewMenu />
+              </Dropdown>
+              <Dropdown
+                label={_('Settings Menu')}
+                className='exclude-title-bar-mousedown dropdown-bottom dropdown-end'
+                buttonClassName='btn btn-ghost h-8 min-h-8 w-8 p-0'
+                toggleButton={<MdOutlineMenu role='none' size={iconSize18} />}
+              >
+                <SettingsMenu onPullLibrary={onPullLibrary} />
+              </Dropdown>
+              {/* Moke embedded reader: hide the fixed minimize, maximize, and close controls.
             {appService?.hasWindowBar && (
               <WindowButtons
                 headerRef={headerRef}
@@ -223,9 +268,10 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
                 showMaximize={windowButtonVisible}
                 showClose={windowButtonVisible}
               />
-            )}
-          </div>
-        )}
+            )} */}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

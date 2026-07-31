@@ -1,26 +1,27 @@
 import clsx from 'clsx';
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { PiUserCircle, PiUserCircleCheck, PiGear } from 'react-icons/pi';
+// Moke embedded reader: account and cloud-sync menu entries are intentionally disabled.
+// import { useRouter } from 'next/navigation';
+import { PiGear } from 'react-icons/pi';
 import { PiSun, PiMoon } from 'react-icons/pi';
 import { TbSunMoon } from 'react-icons/tb';
-import { MdCloudSync, MdSync, MdSyncProblem } from 'react-icons/md';
+// import { MdCloudSync, MdSync, MdSyncProblem } from 'react-icons/md';
 
 import { invoke, PermissionState } from '@tauri-apps/api/core';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
 import { setBackupDialogVisible } from '@/app/library/components/BackupWindow';
 import { setCacheManagerDialogVisible } from '@/app/library/components/CacheManagerWindow';
-import { useAuth } from '@/context/AuthContext';
+// import { useAuth } from '@/context/AuthContext';
 import { useEnv } from '@/context/EnvContext';
 import { useThemeStore } from '@/store/themeStore';
-import { useQuotaStats } from '@/hooks/useQuotaStats';
+// import { useQuotaStats } from '@/hooks/useQuotaStats';
 import { useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTranslation } from '@/hooks/useTranslation';
-import { useResponsiveSize } from '@/hooks/useResponsiveSize';
-import { useTransferQueue } from '@/hooks/useTransferQueue';
-import { navigateToLogin, navigateToProfile } from '@/utils/nav';
+// import { useResponsiveSize } from '@/hooks/useResponsiveSize';
+// import { useTransferQueue } from '@/hooks/useTransferQueue';
+// import { navigateToLogin, navigateToProfile } from '@/utils/nav';
 import { tauriHandleSetAlwaysOnTop, tauriHandleToggleFullScreen } from '@/utils/window';
 import { setAboutDialogVisible } from '@/components/AboutWindow';
 import { setMigrateDataDirDialogVisible } from '@/app/library/components/MigrateDataWindow';
@@ -32,10 +33,10 @@ import {
   isBiometricSupported,
 } from '@/services/biometric';
 import { selectDirectory } from '@/utils/bridge';
-import dayjs from 'dayjs';
-import UserAvatar from '@/components/UserAvatar';
+// import dayjs from 'dayjs';
+// import UserAvatar from '@/components/UserAvatar';
 import MenuItem from '@/components/MenuItem';
-import Quota from '@/components/Quota';
+// import Quota from '@/components/Quota';
 import Menu from '@/components/Menu';
 import { type AppLockDialogMode, useAppLockStore } from '@/store/appLockStore';
 
@@ -51,13 +52,13 @@ interface Permissions {
 
 const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdownOpen }) => {
   const _ = useTranslation();
-  const router = useRouter();
+  // const router = useRouter();
   const { envConfig, appService } = useEnv();
-  const { user } = useAuth();
-  const { userProfilePlan, quotas } = useQuotaStats(true);
+  // const { user } = useAuth();
+  // const { userProfilePlan, quotas } = useQuotaStats(true);
   const { themeMode, setThemeMode } = useThemeStore();
   const { settings, setSettingsDialogOpen } = useSettingsStore();
-  const [isAutoUpload, setIsAutoUpload] = useState(settings.autoUpload);
+  // const [isAutoUpload, setIsAutoUpload] = useState(settings.autoUpload);
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(settings.alwaysOnTop);
   const [isAlwaysShowStatusBar, setIsAlwaysShowStatusBar] = useState(settings.alwaysShowStatusBar);
   const [isOpenLastBooks, setIsOpenLastBooks] = useState(settings.openLastBooks);
@@ -68,7 +69,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
   const [savedBookCoverForLockScreen, setSavedBookCoverForLockScreen] = useState(
     settings.savedBookCoverForLockScreen || '',
   );
-  const iconSize = useResponsiveSize(16);
+  // const iconSize = useResponsiveSize(16);
 
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [refreshMetadataProgress, setRefreshMetadataProgress] = useState('');
@@ -99,13 +100,17 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     openAppLockDialogInStore(mode);
     setIsDropdownOpen?.(false);
   };
-  const { isSyncing, setLibrary } = useLibraryStore();
+  const { setLibrary } = useLibraryStore();
+
+  /* Moke embedded reader: cloud transfer queue is not exposed.
+  const { isSyncing } = useLibraryStore();
   const { stats, hasActiveTransfers, setIsTransferQueueOpen } = useTransferQueue();
 
   const openTransferQueue = () => {
     setIsTransferQueueOpen(true);
     setIsDropdownOpen?.(false);
   };
+  */
 
   const showAboutReadest = () => {
     setAboutDialogVisible(true);
@@ -117,6 +122,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     setIsDropdownOpen?.(false);
   };
 
+  /* Moke embedded reader: authentication and account navigation are not exposed.
   const handleUserLogin = () => {
     navigateToLogin(router);
     setIsDropdownOpen?.(false);
@@ -131,6 +137,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     router.push('/user?section=sync');
     setIsDropdownOpen?.(false);
   };
+  */
 
   const cycleThemeMode = () => {
     const nextMode = themeMode === 'auto' ? 'light' : themeMode === 'light' ? 'dark' : 'auto';
@@ -161,12 +168,14 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     setIsAlwaysShowStatusBar(newValue);
   };
 
+  /* Moke embedded reader: automatic cloud upload is not exposed.
   const toggleAutoUploadBooks = () => {
     const newValue = !settings.autoUpload;
     saveSysSettings(envConfig, 'autoUpload', newValue);
     setIsAutoUpload(newValue);
     // Auth removed: login redirect disabled
   };
+  */
 
   const toggleAutoImportBooksOnOpen = () => {
     const newValue = !settings.autoImportBooksOnOpen;
@@ -180,10 +189,12 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     setIsOpenLastBooks(newValue);
   };
 
+  /* Moke embedded reader: account upgrade is not exposed.
   const handleUpgrade = () => {
     navigateToProfile(router);
     setIsDropdownOpen?.(false);
   };
+  */
 
   const handleSetRootDir = () => {
     setMigrateDataDirDialogVisible(true);
@@ -272,6 +283,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     setAlwaysInForeground(requestAlwaysInForeground);
   };
 
+  /* Moke embedded reader: cloud sync/account display state is not exposed.
   const handleSyncLibrary = () => {
     onPullLibrary(true, true);
     setIsDropdownOpen?.(false);
@@ -280,6 +292,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
   const avatarUrl = user?.user_metadata?.['picture'] || user?.user_metadata?.['avatar_url'];
   const userFullName = user?.user_metadata?.['full_name'];
   const userDisplayName = userFullName ? userFullName.split(' ')[0] : null;
+  */
   const themeModeLabel =
     themeMode === 'dark'
       ? _('Dark Mode')
@@ -291,11 +304,13 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
   const coverDir = savedBookCoverPath ? savedBookCoverPath.split('/').pop() : 'Images';
   const savedBookCoverDescription = `💾 ${coverDir}/last-book-cover.png`;
 
+  /* Moke embedded reader: last cloud-sync timestamp is not displayed.
   const lastSyncTime = Math.max(
     settings.lastSyncedAtBooks || 0,
     settings.lastSyncedAtConfigs || 0,
     settings.lastSyncedAtNotes || 0,
   );
+  */
 
   return (
     <Menu
@@ -305,6 +320,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
       )}
       onCancel={() => setIsDropdownOpen?.(false)}
     >
+      {/* Moke embedded reader: keep the original sign-in, account, transfer, and cloud-sync menu code disabled.
       {user ? (
         <MenuItem
           label={
@@ -372,6 +388,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
         toggled={isAutoUpload}
         onClick={toggleAutoUploadBooks}
       />
+      */}
 
       {isTauriAppPlatform() && (
         <MenuItem
@@ -426,7 +443,9 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
           {appService?.canCustomizeRootDir && (
             <MenuItem label={_('Change Data Location')} onClick={handleSetRootDir} />
           )}
+          {/* Moke embedded reader: cloud data sync entry is disabled.
           {user && <MenuItem label={_('Data Sync')} onClick={handleManageSync} />}
+          */}
           <MenuItem
             label={_('Refresh Metadata')}
             description={refreshMetadataProgress}
@@ -472,9 +491,10 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
         </ul>
       </MenuItem>
       <hr aria-hidden='true' className='border-base-200 my-1' />
+      {/* Moke embedded reader: account upgrade entry is disabled.
       {user && userProfilePlan === 'free' && (
         <MenuItem label={_('Upgrade to Readest Premium')} onClick={handleUpgrade} />
-      )}
+      )} */}
       {isWebAppPlatform() && <MenuItem label={_('Download Readest')} onClick={downloadReadest} />}
       <MenuItem label={_('About Readest')} onClick={showAboutReadest} />
     </Menu>

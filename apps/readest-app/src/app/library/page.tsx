@@ -80,6 +80,7 @@ import {
 } from './utils/libraryUtils';
 import Spinner from '@/components/Spinner';
 import LibraryHeader from './components/LibraryHeader';
+import MokeDownloads from './components/MokeDownloads';
 import Bookshelf from './components/Bookshelf';
 import LibraryEmptyState from './components/LibraryEmptyState';
 import GroupHeader from './components/GroupHeader';
@@ -179,6 +180,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const [showCatalogManager, setShowCatalogManager] = useState(
     searchParams?.get('opds') === 'true',
   );
+  const isMokeEmbedded = searchParams?.get('moke') === '1';
+  const [activeTab, setActiveTab] = useState<'library' | 'moke-downloads'>('library');
   const [showImportFromUrl, setShowImportFromUrl] = useState(false);
   const [loading, setLoading] = useState(false);
   // Seed from the library store: if we already have books in memory (the
@@ -1336,6 +1339,11 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     setIsSelectAll(false);
   };
 
+  const handleTabChange = (tab: 'library' | 'moke-downloads') => {
+    setActiveTab(tab);
+    if (tab !== 'library') handleSetSelectMode(false);
+  };
+
   const handleShowDetailsBook = (book: Book) => {
     setShowDetailsBook(book);
   };
@@ -1370,6 +1378,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         aria-label={_('Library Header')}
       >
         <LibraryHeader
+          activeTab={activeTab}
+          showMokeDownloadsTab={isMokeEmbedded}
           isSelectMode={isSelectMode}
           isSelectAll={isSelectAll}
           onPullLibrary={pullLibrary}
@@ -1382,6 +1392,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           onToggleSelectMode={() => handleSetSelectMode(!isSelectMode)}
           onSelectAll={handleSelectAll}
           onDeselectAll={handleDeselectAll}
+          onTabChange={handleTabChange}
         />
         <progress
           aria-label={_('Library Sync Progress')}
@@ -1399,7 +1410,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           <Spinner loading />
         </div>
       )}
-      {currentGroupPath && (
+      {activeTab === 'library' && currentGroupPath && (
         <div
           className={`transition-all duration-300 ease-in-out ${
             currentGroupPath ? 'opacity-100' : 'max-h-0 opacity-0'
@@ -1433,13 +1444,16 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           </div>
         </div>
       )}
-      {currentSeriesAuthorGroup && (
+      {activeTab === 'library' && currentSeriesAuthorGroup && (
         <GroupHeader
           groupBy={currentSeriesAuthorGroup.groupBy}
           groupName={currentSeriesAuthorGroup.groupName}
         />
       )}
-      {showBookshelf &&
+      {activeTab === 'moke-downloads' ? (
+        <MokeDownloads searchQuery={searchParams?.get('q') ?? ''} />
+      ) : (
+        showBookshelf &&
         (libraryBooks.some((book) => !book.deletedAt) ? (
           <div aria-label={_('Your Bookshelf')} className='flex min-h-0 flex-grow flex-col'>
             <div
@@ -1478,7 +1492,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             <DropIndicator />
             <LibraryEmptyState onImport={handleImportBooksFromFiles} />
           </div>
-        ))}
+        ))
+      )}
       {showDetailsBook && (
         <BookDetailModal
           isOpen={!!showDetailsBook}
