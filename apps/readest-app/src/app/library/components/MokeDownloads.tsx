@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PiBooks, PiFile } from 'react-icons/pi';
+import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
+import { platform } from '@tauri-apps/plugin-os';
 
 import Spinner from '@/components/Spinner';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -25,6 +27,7 @@ interface ParsedMokeBookMetadata {
 
 const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
   const _ = useTranslation();
+  const router = useRouter();
   const { settings } = useSettingsStore();
   const [books, setBooks] = useState<MokeDownloadedBook[]>([]);
   const [bookMetadata, setBookMetadata] = useState<Record<string, ParsedMokeBookMetadata>>({});
@@ -92,10 +95,34 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
   const openBook = async (book: MokeDownloadedBook) => {
     setOpeningId(book.id);
     try {
+      const mokeBookId = book.id.startsWith('legacy:') ? undefined : book.bookId || undefined;
+
+      // `open_reader` creates a separate window and is intentionally only
+      // compiled for desktop. Mobile has a single WebView, so opening a Moke
+      // download must navigate that WebView to the bundled reader instead.
+      const currentPlatform = await platform();
+      if (currentPlatform === 'android' || currentPlatform === 'ios') {
+        const params = new URLSearchParams({
+          file: book.filePath,
+          moke: '1',
+          mokeEink: settings.globalViewSettings?.isEink ? '1' : '0',
+        });
+        if (mokeBookId) params.set('mokeBookId', mokeBookId);
+
+        // App Router navigation does not rerun the root launch script, which
+        // normally seeds these values from the URL on a full page load.
+        window.__MOKE_EMBEDDED = true;
+        window.__MOKE_EINK = settings.globalViewSettings?.isEink ?? false;
+        window.__MOKE_BOOK_ID = mokeBookId ?? null;
+        window.__MOKE_RESTORE_PROGRESS = null;
+        router.push(`/reader?${params.toString()}`);
+        return;
+      }
+
       await invoke('open_reader', {
         filePath: book.filePath,
         eink: settings.globalViewSettings?.isEink ?? false,
-        mokeBookId: book.id.startsWith('legacy:') ? undefined : book.bookId || undefined,
+        mokeBookId,
       });
     } catch (error) {
       console.error('Failed to open Moke downloaded book:', error);
