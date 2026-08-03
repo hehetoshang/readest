@@ -3,7 +3,8 @@ packages:
   - apps/readest-app/workers/send-email
   - apps/readest-app/workers/iap-reconcile
   - apps/readest-app/extensions/*
-  - packages/foliate-js
+  # Moke keeps Readest's shared git submodules at the repository root.
+  - ../packages/foliate-js
 
 allowBuilds:
   core-js: true

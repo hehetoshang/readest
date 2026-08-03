@@ -64,6 +64,40 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  ../packages/foliate-js:
+    dependencies:
+      construct-style-sheets-polyfill:
+        specifier: ^3.1.0
+        version: 3.1.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.9.1
+        version: 9.39.4
+      '@rollup/plugin-node-resolve':
+        specifier: ^15.2.3
+        version: 15.3.1(rollup@4.60.3)
+      '@rollup/plugin-terser':
+        specifier: ^0.4.4
+        version: 0.4.4(rollup@4.60.3)
+      '@zip.js/zip.js':
+        specifier: ^2.7.52
+        version: 2.8.26
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
+      fs-extra:
+        specifier: ^11.2.0
+        version: 11.3.5
+      globals:
+        specifier: ^15.9.0
+        version: 15.15.0
+      pdfjs-dist:
+        specifier: ^5.7.284
+        version: 5.7.284
+      rollup:
+        specifier: '>=4.59.0'
+        version: 4.60.3
+
   apps/readest-app:
     dependencies:
       '@ai-sdk/openai-compatible':
@@ -263,7 +297,7 @@ importers:
         version: 0.8.2
       foliate-js:
         specifier: workspace:*
-        version: link:../../packages/foliate-js
+        version: link:../../../packages/foliate-js
       franc-min:
         specifier: ^6.2.0
         version: 6.2.0
@@ -649,40 +683,6 @@ importers:
       wrangler:
         specifier: ^4.0.0
         version: 4.90.0(@cloudflare/workers-types@4.20260518.1)
-
-  packages/foliate-js:
-    dependencies:
-      construct-style-sheets-polyfill:
-        specifier: ^3.1.0
-        version: 3.1.0
-    devDependencies:
-      '@eslint/js':
-        specifier: ^9.9.1
-        version: 9.39.4
-      '@rollup/plugin-node-resolve':
-        specifier: ^15.2.3
-        version: 15.3.1(rollup@4.60.3)
-      '@rollup/plugin-terser':
-        specifier: ^0.4.4
-        version: 0.4.4(rollup@4.60.3)
-      '@zip.js/zip.js':
-        specifier: ^2.7.52
-        version: 2.8.26
-      fflate:
-        specifier: ^0.8.2
-        version: 0.8.2
-      fs-extra:
-        specifier: ^11.2.0
-        version: 11.3.5
-      globals:
-        specifier: ^15.9.0
-        version: 15.15.0
-      pdfjs-dist:
-        specifier: ^5.7.284
-        version: 5.7.284
-      rollup:
-        specifier: '>=4.59.0'
-        version: 4.60.3
 
 packages:
 
@@ -13977,7 +13977,7 @@ snapshots:
       asynckit: 0.4.0
       combined-stream: 1.0.8
       es-set-tostringtag: 2.1.0
-      hasown: 2.0.4
+      hasown: 2.0.3
       mime-types: 2.1.35
 
   formdata-node@4.4.1:
