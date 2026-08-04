@@ -434,7 +434,19 @@ export const nativeFileSystem: FileSystem = {
   async createDir(path: string, base: BaseDir, recursive = false) {
     const { fp, baseDir } = this.resolvePath(path, base);
 
-    await mkdir(fp, { baseDir: baseDir ? baseDir : undefined, recursive });
+    try {
+      await mkdir(fp, { baseDir: baseDir ? baseDir : undefined, recursive });
+    } catch (error) {
+      // On OHOS the Tauri fs plugin's mkdir may surface EEXIST as an
+      // error even with recursive=true.  The book-import path checks
+      // exists→createDir without a lock, so a TOCTOU race can also
+      // trigger this on any platform.  Treat an already-existing
+      // directory as success.
+      const msg = error instanceof Error ? error.message : String(error);
+      if (!/(?:os error 17)\b|File exists/i.test(msg)) {
+        throw error;
+      }
+    }
     // Now that the dir is on disk, record it so subsequent writes can
     // skip the `exists` probe.
     markDirKnown(base, path);
@@ -595,11 +607,22 @@ export class NativeAppService extends BaseAppService {
   }
 
   override async init() {
-    const execDir = await invoke<string>('get_executable_dir');
+    // Moke's single-WebView integration (OHOS) does not register readest's
+    // own backend commands, so `get_executable_dir` throws "Command not
+    // found". execDir is only used for portable detection and customRootDir
+    // resolution; in the Moke flow files are addressed by absolute paths,
+    // so degrade to an empty execDir and skip those branches.
+    let execDir = '';
+    try {
+      execDir = await invoke<string>('get_executable_dir');
+    } catch (e) {
+      console.warn('[nativeAppService] get_executable_dir unavailable:', e);
+    }
     this.execDir = execDir;
     if (
-      process.env['NEXT_PUBLIC_PORTABLE_APP'] ||
-      (await this.fs.exists(`${execDir}/${SETTINGS_FILENAME}`, 'None'))
+      execDir &&
+      (process.env['NEXT_PUBLIC_PORTABLE_APP'] ||
+        (await this.fs.exists(`${execDir}/${SETTINGS_FILENAME}`, 'None')))
     ) {
       this.isPortableApp = true;
       this.fs.resolvePath = getPathResolver({
