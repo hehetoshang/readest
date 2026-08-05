@@ -184,9 +184,14 @@ export async function getSysFontsList(): Promise<GetSystemFontsListResponse> {
 }
 
 export async function interceptKeys(request: InterceptKeysRequest): Promise<void> {
-  await invoke('plugin:native-bridge|intercept_keys', {
-    payload: request,
-  });
+  try {
+    await invoke('plugin:native-bridge|intercept_keys', {
+      payload: request,
+    });
+  } catch {
+    // OHOS has no native-bridge backend; key interception (back key,
+    // volume keys, page-turner) silently degrades to platform defaults.
+  }
 }
 
 export async function lockScreenOrientation(request: LockScreenRequest): Promise<void> {
