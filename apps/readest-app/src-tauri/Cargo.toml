@@ -54,7 +54,6 @@ tauri = { version = "2", features = [ "protocol-asset" ] }
 tauri-build = "2"
 tauri-plugin-log = "2"
 tauri-plugin-fs = "2"
-tauri-plugin-dialog = "2"
 tauri-plugin-os = "2"
 tauri-plugin-http = { version = "2", features = ["dangerous-settings"] }
 tauri-plugin-shell = "2"
@@ -118,11 +117,28 @@ objc2 = "0.6"
 objc2-authentication-services = "0.3"
 objc2-foundation = { version = "0.3", features = ["NSError", "NSArray"] }
 
-[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+# Desktop-only. On OpenHarmony (target_os = "linux") these are compiled by
+# target cfg but never registered (`#[cfg(desktop)]` in lib.rs), and
+# tauri-plugin-window-state's code doesn't match the fork's reduced OHOS
+# Window API surface — same exclusion as the Moke client's host app.
+[target.'cfg(all(any(target_os = "macos", windows, target_os = "linux"), not(target_env = "ohos")))'.dependencies]
 tauri-plugin-cli = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
 discord-rich-presence = "1.0.0"
+
+# Desktop-only. On Linux the dialog plugin pulls the GTK stack (rfd -> gtk-sys),
+# which fails to cross-compile for x86_64-unknown-linux-ohos (target_os =
+# "linux") with a pkg-config error. OpenHarmony has no native dialog backend
+# anyway — same exclusion as the Moke client's host app.
+[target.'cfg(not(target_env = "ohos"))'.dependencies]
+tauri-plugin-dialog = "2"
+
+[target.'cfg(target_env = "ohos")'.dependencies]
+# Required directly by the OpenHarmony entry-point macro (tauri::mobile_entry_point
+# expands `use ::tauri::ohos::*`), as in the upstream OHOS demo.
+napi-ohos = "1.1"
+napi-derive-ohos = "1.1"
 
 [target.'cfg(target_os = "android")'.dependencies]
 libc = "0.2"

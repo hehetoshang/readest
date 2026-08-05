@@ -24,7 +24,10 @@ use tauri_plugin_fs::FsExt;
 use tauri::{Listener, Url};
 mod clip_url;
 mod dir_scanner;
-#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+#[cfg(all(
+    any(target_os = "macos", target_os = "windows", target_os = "linux"),
+    not(target_env = "ohos")
+))]
 mod discord_rpc;
 mod epub_parser;
 #[cfg(target_os = "macos")]
@@ -262,7 +265,7 @@ struct SingleInstancePayload {
 pub fn register_reader_plugins(
     builder: tauri::Builder<tauri::Wry>,
 ) -> tauri::Builder<tauri::Wry> {
-    builder
+    let builder = builder
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -271,12 +274,18 @@ pub fn register_reader_plugins(
                 .build(),
         )
         .plugin(tauri_plugin_persisted_scope::init())
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_websocket::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_oauth::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_device_info::init())
+        .plugin(tauri_plugin_device_info::init());
+
+    // Desktop-only: the dialog plugin pulls the GTK stack on Linux targets
+    // (rfd -> gtk-sys), which does not cross-compile for OpenHarmony.
+    #[cfg(not(target_env = "ohos"))]
+    let builder = builder.plugin(tauri_plugin_dialog::init());
+
+    builder
         .plugin(tauri_plugin_turso::init())
         .plugin(tauri_plugin_native_bridge::init())
         .plugin(tauri_plugin_native_tts::init())
@@ -295,7 +304,10 @@ pub fn register_reader_protocols(
 
 /// Manage reader-related app state (currently the Discord Rich Presence
 /// client). Call once from the host app's `setup`.
-#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+#[cfg(all(
+    any(target_os = "macos", target_os = "windows", target_os = "linux"),
+    not(target_env = "ohos")
+))]
 pub fn manage_reader_state(app: &AppHandle) {
     use std::sync::{Arc, Mutex};
     let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));
@@ -437,9 +449,15 @@ pub fn reader_invoke_handler(
         epub_parser::parse_epub_full,
         mobi_parser::parse_mobi_metadata,
         mobi_parser::extract_mobi_cover_full,
-        #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+        #[cfg(all(
+    any(target_os = "macos", target_os = "windows", target_os = "linux"),
+    not(target_env = "ohos")
+))]
         discord_rpc::update_book_presence,
-        #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+        #[cfg(all(
+    any(target_os = "macos", target_os = "windows", target_os = "linux"),
+    not(target_env = "ohos")
+))]
         discord_rpc::clear_book_presence,
         clip_url::clip_url,
     ]
@@ -480,9 +498,15 @@ pub fn run() {
             macos::traffic_light::set_traffic_lights,
             #[cfg(target_os = "macos")]
             macos::system_dictionary::show_lookup_popover,
-            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+            #[cfg(all(
+    any(target_os = "macos", target_os = "windows", target_os = "linux"),
+    not(target_env = "ohos")
+))]
             discord_rpc::update_book_presence,
-            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+            #[cfg(all(
+    any(target_os = "macos", target_os = "windows", target_os = "linux"),
+    not(target_env = "ohos")
+))]
             discord_rpc::clear_book_presence,
             clip_url::clip_url,
         ])
@@ -492,10 +516,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_sharekit::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_device_info::init())
+        .plugin(tauri_plugin_device_info::init());
+
+    // Desktop-only: the dialog plugin pulls the GTK stack on Linux targets
+    // (rfd -> gtk-sys), which does not cross-compile for OpenHarmony.
+    #[cfg(not(target_env = "ohos"))]
+    let builder = builder.plugin(tauri_plugin_dialog::init());
+
+    let builder = builder
         .plugin(tauri_plugin_turso::init())
         .plugin(tauri_plugin_native_bridge::init())
         .plugin(tauri_plugin_native_tts::init())
@@ -523,6 +553,9 @@ pub fn run() {
             .build(),
     );
 
+    // Patched copy (patches/tauri-plugin-deep-link) compiles on OpenHarmony
+    // too; with no OS deep-link integration there, `get_current` answers null
+    // and the frontend's cold-start deep-link read doesn't reject IPC.
     let builder = builder.plugin(tauri_plugin_deep_link::init());
 
     // 更新系统已移除：不再注册 tauri_plugin_updater。
@@ -565,7 +598,10 @@ pub fn run() {
                 use tauri::Manager;
                 app.add_capability(include_str!("../capabilities-extra/webdriver.json"))?;
             }
-            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+            #[cfg(all(
+    any(target_os = "macos", target_os = "windows", target_os = "linux"),
+    not(target_env = "ohos")
+))]
             {
                 use std::sync::{Arc, Mutex};
                 let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));
@@ -595,7 +631,7 @@ pub fn run() {
                 allow_dir_in_scopes(app, path);
             });
 
-            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            #[cfg(all(any(target_os = "windows", target_os = "linux"), not(target_env = "ohos")))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 let _ = app.deep_link().register_all();

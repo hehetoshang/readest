@@ -1,7 +1,10 @@
 [workspace]
+# `packages/tauri/crates/tauri` is intentionally NOT a workspace member: the
+# OpenHarmony patch below redirects `tauri` to the Moke client's fork, and a
+# second tauri package in the workspace would collide on the `links = "Tauri"`
+# native library. The rest of `packages/tauri` stays on disk for reference.
 members = [
   "apps/readest-app/src-tauri",
-  "packages/tauri/crates/tauri",
   "packages/tauri-plugins/plugins/fs"
 ]
 exclude = [
@@ -38,5 +41,39 @@ edition = "2021"
 rust-version = "1.77.2"
 
 [patch.crates-io]
-tauri = { path = "packages/tauri/crates/tauri" }
+# OpenHarmony: use the same Tauri fork as the Moke client. The stock tauri 2
+# (and readest's own packages/tauri copy) pulls the GTK stack (gio-sys/
+# pango-sys) on Linux targets, which fails to cross-compile for
+# x86_64-unknown-linux-ohos (target_os = "linux"). The fork's OpenHarmony
+# backend drops those dependencies and provides the OHOS runtime used by
+# `mobile_entry_point`. `../tauri` resolves to Moke's `tauri` submodule when
+# readest lives under the Moke repository; a standalone readest checkout that
+# does not carry that submodule keeps working for its own (desktop/mobile)
+# builds by pointing these paths back at packages/tauri.
+tauri = { path = "../tauri/crates/tauri" }
+tauri-build = { path = "../tauri/crates/tauri-build" }
+tauri-codegen = { path = "../tauri/crates/tauri-codegen" }
+tauri-macros = { path = "../tauri/crates/tauri-macros" }
+tauri-plugin = { path = "../tauri/crates/tauri-plugin" }
+tauri-runtime = { path = "../tauri/crates/tauri-runtime" }
+tauri-runtime-wry = { path = "../tauri/crates/tauri-runtime-wry" }
+tauri-utils = { path = "../tauri/crates/tauri-utils" }
+# Readest's own fs plugin fork (custom mobile commands) is kept.
 tauri-plugin-fs = { path = "packages/tauri-plugins/plugins/fs" }
+# Cargo only honors patches declared by the workspace root. The same entries
+# in the Tauri submodule's workspace do not apply here.
+wry = { git = "https://github.com/tauri-apps/wry", branch = "feat/open-harmony" }
+tao = { git = "https://github.com/tauri-apps/tao", branch = "feat/open-harmony" }
+openharmony-ability = { git = "https://github.com/harmony-contrib/openharmony-ability.git" }
+openharmony-ability-derive = { git = "https://github.com/harmony-contrib/openharmony-ability.git" }
+# turso_ext's build.rs checks `cfg!(target_os = "windows")`, which evaluates
+# on the build *host*: cross-compiling from Windows for OpenHarmony
+# (target_os = "linux") wrongly links advapi32 (a Windows-only lib). Vendored
+# at patches/turso_ext with the target read via CARGO_CFG_TARGET_OS; the
+# crate source is otherwise identical to crates.io 0.6.1.
+turso_ext = { path = "patches/turso_ext" }
+# tauri-plugin-deep-link reads `Env::appimage` on Linux, a field the Moke
+# Tauri fork only exposes off-OpenHarmony. Vendored at
+# patches/tauri-plugin-deep-link with that read cfg-gated for OHOS; the rest
+# of the crate is identical to crates.io 2.4.9.
+tauri-plugin-deep-link = { path = "patches/tauri-plugin-deep-link" }
