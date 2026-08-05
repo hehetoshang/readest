@@ -169,11 +169,18 @@ export async function getSysFontsList(): Promise<GetSystemFontsListResponse> {
   if (cachedSysFontsResult) {
     return cachedSysFontsResult;
   }
-  const result = await invoke<GetSystemFontsListResponse>(
-    'plugin:native-bridge|get_sys_fonts_list',
-  );
-  cachedSysFontsResult = result;
-  return result;
+  try {
+    const result = await invoke<GetSystemFontsListResponse>(
+      'plugin:native-bridge|get_sys_fonts_list',
+    );
+    cachedSysFontsResult = result;
+    return result;
+  } catch (error) {
+    // OHOS has no native-bridge backend ("Unsupported platform for this
+    // plugin"). Return an empty list instead of surfacing an unhandled
+    // rejection so font panels degrade gracefully.
+    return { fonts: {}, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export async function interceptKeys(request: InterceptKeysRequest): Promise<void> {
