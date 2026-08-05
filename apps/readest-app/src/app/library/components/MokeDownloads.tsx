@@ -100,8 +100,19 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
       // `open_reader` creates a separate window and is intentionally only
       // compiled for desktop. Mobile has a single WebView, so opening a Moke
       // download must navigate that WebView to the bundled reader instead.
-      const currentPlatform = await platform();
-      if (currentPlatform === 'android' || currentPlatform === 'ios') {
+      // Note: plugin-os reports OHOS as 'linux' (target triple), so probe the
+      // Moke host command first; standalone readest has no such command.
+      let currentPlatform = await platform();
+      try {
+        currentPlatform = await invoke<string>('moke_runtime_platform');
+      } catch {
+        // standalone readest — plugin-os platform is authoritative
+      }
+      if (
+        currentPlatform === 'ohos' ||
+        currentPlatform === 'android' ||
+        currentPlatform === 'ios'
+      ) {
         const params = new URLSearchParams({
           file: book.filePath,
           moke: '1',
