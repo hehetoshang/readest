@@ -24,7 +24,7 @@ use tauri_plugin_fs::FsExt;
 use tauri::{Listener, Url};
 mod clip_url;
 mod dir_scanner;
-#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
 mod discord_rpc;
 mod epub_parser;
 #[cfg(target_os = "macos")]
@@ -262,7 +262,7 @@ struct SingleInstancePayload {
 pub fn register_reader_plugins(
     builder: tauri::Builder<tauri::Wry>,
 ) -> tauri::Builder<tauri::Wry> {
-    builder
+    let builder = builder
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -271,15 +271,24 @@ pub fn register_reader_plugins(
                 .build(),
         )
         .plugin(tauri_plugin_persisted_scope::init())
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_websocket::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_oauth::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_device_info::init())
         .plugin(tauri_plugin_turso::init())
         .plugin(tauri_plugin_native_bridge::init())
-        .plugin(tauri_plugin_native_tts::init())
+        .plugin(tauri_plugin_native_tts::init());
+
+    // Desktop-only plugins. tauri-plugin-dialog pulls in `rfd` (gtk-sys /
+    // glib-sys) which cannot cross-compile to OHOS; the clipboard-manager
+    // backend (arboard) is likewise desktop-only. Moke's own Cargo.toml gates
+    // these with cfg(not(target_env = "ohos")) too.
+    #[cfg(not(target_env = "ohos"))]
+    let builder = builder
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
+
+    builder
 }
 
 /// Register reader URI protocols on an embedding host's Tauri builder.
@@ -295,14 +304,14 @@ pub fn register_reader_protocols(
 
 /// Manage reader-related app state (currently the Discord Rich Presence
 /// client). Call once from the host app's `setup`.
-#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
 pub fn manage_reader_state(app: &AppHandle) {
     use std::sync::{Arc, Mutex};
     let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));
     app.manage(discord_client);
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos")))))]
 pub fn manage_reader_state(_app: &AppHandle) {}
 
 /// Open a reader window that loads the embedded readest frontend (served by
