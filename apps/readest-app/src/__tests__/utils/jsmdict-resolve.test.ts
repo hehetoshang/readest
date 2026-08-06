@@ -5,11 +5,11 @@ import { MDX, MDD, BlobScanner } from 'js-mdict';
 
 const MDX_PATH = path.resolve(
   __dirname,
-  '../../../../../../packages/js-mdict/tests/data/mini/mini.mdx',
+  '../../../../../../vendor/js-mdict/tests/data/mini/mini.mdx',
 );
 const MDD_PATH = path.resolve(
   __dirname,
-  '../../../../../../packages/js-mdict/tests/data/mini/mini.mdd',
+  '../../../../../../vendor/js-mdict/tests/data/mini/mini.mdd',
 );
 
 describe('js-mdict resolves from readest-app', () => {

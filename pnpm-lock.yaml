@@ -64,7 +64,7 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  ../packages/foliate-js:
+  ../vendor/foliate-js:
     dependencies:
       construct-style-sheets-polyfill:
         specifier: ^3.1.0
@@ -297,7 +297,7 @@ importers:
         version: 0.8.2
       foliate-js:
         specifier: workspace:*
-        version: link:../../../packages/foliate-js
+        version: link:../../../vendor/foliate-js
       franc-min:
         specifier: ^6.2.0
         version: 6.2.0
@@ -3375,6 +3375,18 @@ packages:
     resolution: {integrity: sha512-UQ1Obj+BSZqE8zSfCvnNn3VLGu4ECGGIfkbF9v13+h/HeZr8JroTXdk0Y8WAGvb7m/hyvjEk+gU+1L0ydkKxWQ==}
     cpu: [arm64]
     os: [darwin]
+
+  '@tursodatabase/database-linux-arm64-gnu@0.6.0-pre.28':
+    resolution: {integrity: sha512-a5OkedE0AissAbjocvDCsmcQc4gtnVWpwbcbeJ6EoC3oJApK4AzX6vzCl8W4oA7k4cn/V9U4L1QGjWZlLcjePg==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tursodatabase/database-linux-x64-gnu@0.6.0-pre.28':
+    resolution: {integrity: sha512-raEgDNNUxZn2jKX0jV6XEozyWt+3wnazstPLx+YhCU3vSGEui4xnD/ehulCRPCKbybOAFLpmeLvkolc29KFLww==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
 
   '@tursodatabase/database-win32-x64-msvc@0.6.0-pre.28':
     resolution: {integrity: sha512-BrGP+LtkvDR5hxb8a98ltQ9KZgLSn/njLEvDIL/D7OJY811EVcKVtw6dgVDXoQccv3w/NfEGP8MB4kHC4A3dIA==}
@@ -11699,6 +11711,12 @@ snapshots:
   '@tursodatabase/database-darwin-arm64@0.6.0-pre.28':
     optional: true
 
+  '@tursodatabase/database-linux-arm64-gnu@0.6.0-pre.28':
+    optional: true
+
+  '@tursodatabase/database-linux-x64-gnu@0.6.0-pre.28':
+    optional: true
+
   '@tursodatabase/database-win32-x64-msvc@0.6.0-pre.28':
     optional: true
 
@@ -11707,6 +11725,8 @@ snapshots:
       '@tursodatabase/database-common': 0.6.0-pre.30
     optionalDependencies:
       '@tursodatabase/database-darwin-arm64': 0.6.0-pre.28
+      '@tursodatabase/database-linux-arm64-gnu': 0.6.0-pre.28
+      '@tursodatabase/database-linux-x64-gnu': 0.6.0-pre.28
       '@tursodatabase/database-win32-x64-msvc': 0.6.0-pre.28
 
   '@tybys/wasm-util@0.10.2':
@@ -13665,7 +13685,7 @@ snapshots:
       es-errors: 1.3.0
       get-intrinsic: 1.3.0
       has-tostringtag: 1.0.2
-      hasown: 2.0.3
+      hasown: 2.0.4
 
   es-toolkit@1.46.1: {}
 
@@ -13977,7 +13997,7 @@ snapshots:
       asynckit: 0.4.0
       combined-stream: 1.0.8
       es-set-tostringtag: 2.1.0
-      hasown: 2.0.3
+      hasown: 2.0.4
       mime-types: 2.1.35
 
   formdata-node@4.4.1:
