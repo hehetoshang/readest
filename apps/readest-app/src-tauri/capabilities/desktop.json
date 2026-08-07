@@ -3,5 +3,10 @@
   "identifier": "desktop-capability",
   "windows": ["main", "reader-*"],
   "platforms": ["linux", "macOS", "windows"],
-  "permissions": ["cli:default"]
+  "permissions": [
+    "cli:default",
+    "dialog:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text"
+  ]
 }
