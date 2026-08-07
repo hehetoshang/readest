@@ -281,9 +281,11 @@ pub fn register_reader_plugins(
 
     // Desktop-only plugins. tauri-plugin-dialog pulls in `rfd` (gtk-sys /
     // glib-sys) which cannot cross-compile to OHOS; the clipboard-manager
-    // backend (arboard) is likewise desktop-only. Moke's own Cargo.toml gates
-    // these with cfg(not(target_env = "ohos")) too.
-    #[cfg(not(target_env = "ohos"))]
+    // backend (arboard) is likewise desktop-only. Cargo.toml gates these
+    // deps to `any(macos, windows, all(linux, not(ohos)))`, so the cfg here
+    // must match exactly — `not(ohos)` alone would also compile them on
+    // iOS/Android where the crates don't exist.
+    #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init());
@@ -446,9 +448,9 @@ pub fn reader_invoke_handler(
         epub_parser::parse_epub_full,
         mobi_parser::parse_mobi_metadata,
         mobi_parser::extract_mobi_cover_full,
-        #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
         discord_rpc::update_book_presence,
-        #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
         discord_rpc::clear_book_presence,
         clip_url::clip_url,
     ]
@@ -489,9 +491,9 @@ pub fn run() {
             macos::traffic_light::set_traffic_lights,
             #[cfg(target_os = "macos")]
             macos::system_dictionary::show_lookup_popover,
-            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
             discord_rpc::update_book_presence,
-            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
             discord_rpc::clear_book_presence,
             clip_url::clip_url,
         ])
@@ -500,10 +502,17 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_os::init());
+
+    // Desktop-only (see Cargo.toml): the dialog (rfd) and clipboard-manager
+    // (arboard) backends are not available on mobile / OHOS.
+    #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+    let builder = builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
+
+    let builder = builder
         .plugin(tauri_plugin_sharekit::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_device_info::init())
         .plugin(tauri_plugin_turso::init())
         .plugin(tauri_plugin_native_bridge::init())
@@ -574,7 +583,7 @@ pub fn run() {
                 use tauri::Manager;
                 app.add_capability(include_str!("../capabilities-extra/webdriver.json"))?;
             }
-            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+            #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
             {
                 use std::sync::{Arc, Mutex};
                 let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));

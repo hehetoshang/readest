@@ -36,12 +36,20 @@ fn install_default_keyring_store() {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "ohos")))]
 fn install_default_keyring_store() {
     match dbus_secret_service_keyring_store::Store::new() {
         Ok(store) => keyring_core::set_default_store(store),
         Err(err) => eprintln!("[native-bridge] secret service init failed: {err}"),
     }
+}
+
+#[cfg(target_env = "ohos")]
+fn install_default_keyring_store() {
+    // OpenHarmony has no Secret Service / OS keychain. Keep the same
+    // swallow-and-log semantics as desktop; the TS layer falls back to the
+    // ephemeral store when the sync passphrase APIs report failure.
+    eprintln!("[native-bridge] keyring unavailable on OpenHarmony");
 }
 
 /// Access to the native-bridge APIs.
@@ -90,17 +98,28 @@ impl<R: Runtime> NativeBridge<R> {
     }
 
     pub fn get_sys_fonts_list(&self) -> crate::Result<GetSysFontsListResponse> {
-        let font_collection = font_enumeration::Collection::new().unwrap();
-        let mut fonts = HashMap::new();
-        for font in font_collection.all() {
-            if cfg!(target_os = "windows") {
-                // FIXME: temporarily disable font name with style for windows
-                fonts.insert(font.family_name.clone(), font.family_name.clone());
-            } else {
-                fonts.insert(font.font_name.clone(), font.family_name.clone());
+        #[cfg(target_env = "ohos")]
+        return Ok(GetSysFontsListResponse {
+            // `font-enumeration` is not built for OpenHarmony; the webview
+            // falls back to CSS font stacks.
+            fonts: HashMap::new(),
+            error: None,
+        });
+
+        #[cfg(not(target_env = "ohos"))]
+        {
+            let font_collection = font_enumeration::Collection::new().unwrap();
+            let mut fonts = HashMap::new();
+            for font in font_collection.all() {
+                if cfg!(target_os = "windows") {
+                    // FIXME: temporarily disable font name with style for windows
+                    fonts.insert(font.family_name.clone(), font.family_name.clone());
+                } else {
+                    fonts.insert(font.font_name.clone(), font.family_name.clone());
+                }
             }
+            Ok(GetSysFontsListResponse { fonts, error: None })
         }
-        Ok(GetSysFontsListResponse { fonts, error: None })
     }
 
     pub fn intercept_keys(&self, _payload: InterceptKeysRequest) -> crate::Result<()> {
@@ -217,6 +236,13 @@ impl<R: Runtime> NativeBridge<R> {
         &self,
         payload: SetSyncPassphraseRequest,
     ) -> crate::Result<SyncPassphraseResponse> {
+        #[cfg(target_env = "ohos")]
+        return Ok(SyncPassphraseResponse {
+            success: false,
+            error: Some("sync keychain unavailable on OpenHarmony".into()),
+        });
+
+        #[cfg(not(target_env = "ohos"))]
         match keyring_entry().and_then(|e| e.set_password(&payload.passphrase)) {
             Ok(()) => Ok(SyncPassphraseResponse {
                 success: true,
@@ -230,6 +256,13 @@ impl<R: Runtime> NativeBridge<R> {
     }
 
     pub fn get_sync_passphrase(&self) -> crate::Result<GetSyncPassphraseResponse> {
+        #[cfg(target_env = "ohos")]
+        return Ok(GetSyncPassphraseResponse {
+            passphrase: None,
+            error: Some("sync keychain unavailable on OpenHarmony".into()),
+        });
+
+        #[cfg(not(target_env = "ohos"))]
         match keyring_entry().and_then(|e| e.get_password()) {
             Ok(passphrase) => Ok(GetSyncPassphraseResponse {
                 passphrase: Some(passphrase),
@@ -247,6 +280,13 @@ impl<R: Runtime> NativeBridge<R> {
     }
 
     pub fn clear_sync_passphrase(&self) -> crate::Result<SyncPassphraseResponse> {
+        #[cfg(target_env = "ohos")]
+        return Ok(SyncPassphraseResponse {
+            success: false,
+            error: Some("sync keychain unavailable on OpenHarmony".into()),
+        });
+
+        #[cfg(not(target_env = "ohos"))]
         match keyring_entry().and_then(|e| e.delete_credential()) {
             Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(SyncPassphraseResponse {
                 success: true,
@@ -260,6 +300,13 @@ impl<R: Runtime> NativeBridge<R> {
     }
 
     pub fn is_sync_keychain_available(&self) -> crate::Result<SyncKeychainAvailableResponse> {
+        #[cfg(target_env = "ohos")]
+        return Ok(SyncKeychainAvailableResponse {
+            available: false,
+            error: Some("sync keychain unavailable on OpenHarmony".into()),
+        });
+
+        #[cfg(not(target_env = "ohos"))]
         // Best-effort probe: open an entry handle. Surface the error
         // string instead of throwing so the TS layer can fall back
         // to the ephemeral store gracefully.
@@ -290,6 +337,7 @@ impl<R: Runtime> NativeBridge<R> {
 const KEYRING_SERVICE: &str = "Readest Safe Storage";
 const KEYRING_USER: &str = "default";
 
+#[cfg(not(target_env = "ohos"))]
 fn keyring_entry() -> std::result::Result<keyring_core::Entry, keyring_core::Error> {
     keyring_core::Entry::new(KEYRING_SERVICE, KEYRING_USER)
 }
