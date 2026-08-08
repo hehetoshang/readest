@@ -14,7 +14,7 @@ import {
   normalizeFilePathForIndex,
   selectNewImportableFiles,
 } from '@/services/bookService';
-import { navigateToLibrary, navigateToLogin, navigateToReader } from '@/utils/nav';
+import { navigateToLibrary, navigateToReader } from '@/utils/nav';
 import { getCoverFilename, getBookWithUpdatedMetadata, listFormater } from '@/utils/book';
 import { getImportErrorMessage } from '@/services/errors';
 import { ingestFile } from '@/services/ingestService';
@@ -159,7 +159,7 @@ const LibraryPageWithSearchParams = () => {
 const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchParams | null }) => {
   const router = useAppRouter();
   const { envConfig, appService } = useEnv();
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const {
     library: libraryBooks,
     libraryLoaded: libraryLoadedFromDisk,
@@ -312,11 +312,11 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   usePullToRefresh(
     scrollRef,
     async () => {
-      await pullLibrary(false, true);
+      // Moke embedded reader: cloud book sync is removed, so there's nothing to
+      // pull; OPDS subscription refresh is kept.
       checkOPDSSubscriptions(true);
     },
     async () => {
-      await pullLibrary(true, true);
       checkOPDSSubscriptions(true);
     },
   );

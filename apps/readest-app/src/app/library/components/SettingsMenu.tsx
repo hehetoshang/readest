@@ -259,6 +259,9 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     setSavedBookCoverForLockScreen(newValue);
   };
 
+  /* Moke embedded reader: always-in-foreground toggle depends on native-bridge
+     permission helpers that are not wired up in the embedded build, and the
+     setting doesn't exist in SystemSettings. Kept for reference.
   const toggleAlwaysInForeground = async () => {
     const requestAlwaysInForeground = !settings.alwaysInForeground;
 

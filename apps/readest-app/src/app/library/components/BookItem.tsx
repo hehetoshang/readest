@@ -6,7 +6,6 @@ import { LiaInfoCircleSolid } from 'react-icons/lia';
 import { Book } from '@/types/book';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
-import { useSettingsStore } from '@/store/settingsStore';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { LibraryCoverFitType, LibraryViewModeType } from '@/types/settings';
 import { formatAuthors, formatDescription, formatSeries } from '@/utils/book';
@@ -33,14 +32,11 @@ const BookItem: React.FC<BookItemProps> = ({
   isSelectMode,
   bookSelected,
   transferProgress,
-  handleBookUpload,
-  handleBookDownload,
   showBookDetailsModal,
   showTimeRemaining,
 }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
-  const { settings } = useSettingsStore();
   const iconSize15 = useResponsiveSize(15);
 
   const [coverAspect, setCoverAspect] = useState<number | null>(null);

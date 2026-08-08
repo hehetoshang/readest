@@ -22,59 +22,23 @@
  * Adapted from ratatabananana-bit/Readest-google-drive-mod-patcher (AGPL-3.0),
  * used with the author's explicit permission.
  */
-import { authWithSafari } from '@/app/auth/utils/nativeAuth';
-import { createPkcePair } from './pkce';
-import { runOAuthFlow, type OAuthClientConfig } from './oauthFlow';
-import { exchangeCode, type FetchFn, type TokenSet } from './tokenEndpoint';
+// Moke embedded reader: this iOS OAuth flow is disabled along with the
+// cloud-sync feature set. The native auth helper import was removed with the
+// account system, and the flow helpers are unused now that the body is stubbed.
+// import { authWithSafari } from '@/app/auth/utils/nativeAuth';
+// import { createPkcePair } from './pkce';
+// import { runOAuthFlow } from './oauthFlow';
+// import { exchangeCode } from './tokenEndpoint';
+import type { OAuthClientConfig } from './oauthFlow';
+import type { FetchFn, TokenSet } from './tokenEndpoint';
 
 /**
- * Run the iOS `ASWebAuthenticationSession` OAuth flow and return the resulting
- * tokens. Wires {@link runOAuthFlow} with the iOS mechanics: open consent in a
- * web-auth session keyed to the reverse-DNS callback scheme and resolve with the
- * redirect the native bridge captures.
+ * Moke embedded reader: the iOS `ASWebAuthenticationSession` OAuth flow is
+ * disabled along with the rest of the cloud-sync feature set (its native auth
+ * helper was removed with the account system). The export is kept so the
+ * (also-disabled) OneDrive/Drive connectors still type-check; it throws if ever
+ * invoked.
  */
-export const runIosOAuth = (config: OAuthClientConfig, fetchFn: FetchFn): Promise<TokenSet> => {
-  const redirectUri = config.redirectUri;
-  // ASWebAuthenticationSession matches on the bare scheme (no path); pass the
-  // client-id-derived reverse-DNS scheme so the native session recognises the
-  // `com.googleusercontent.apps.<id>:/oauthredirect?...` bounce-back.
-  const callbackScheme = config.redirectScheme;
-
-  // `auth_with_safari` opens consent AND resolves with the redirect URL in a
-  // single native round-trip — so it needs the auth URL, which `runOAuthFlow`
-  // only hands to `openUrl`. Bridge the two with a deferred: `openUrl` supplies
-  // the URL, and `awaitRedirect` (invoked first) waits for it before driving the
-  // web-auth session.
-  let provideAuthUrl!: (url: string) => void;
-  const authUrlReady = new Promise<string>((resolve) => {
-    provideAuthUrl = resolve;
-  });
-
-  return runOAuthFlow(config.scope, {
-    createPkcePair,
-    newState: () => crypto.randomUUID(),
-    clientId: config.clientId,
-    openUrl: async (url) => {
-      provideAuthUrl(url);
-    },
-    awaitRedirect: async () => {
-      const authUrl = await authUrlReady;
-      const { redirectUrl } = await authWithSafari({ authUrl, callbackScheme });
-      return redirectUrl;
-    },
-    redirectUri,
-    authEndpoint: config.authEndpoint,
-    authParams: config.authParams,
-    exchange: ({ code, verifier, redirectUri: uri }) =>
-      exchangeCode(
-        {
-          code,
-          verifier,
-          clientId: config.clientId,
-          redirectUri: uri,
-          tokenEndpoint: config.tokenEndpoint,
-        },
-        fetchFn,
-      ),
-  });
+export const runIosOAuth = (_config: OAuthClientConfig, _fetchFn: FetchFn): Promise<TokenSet> => {
+  throw new Error('runIosOAuth is disabled in Moke (cloud sync removed)');
 };

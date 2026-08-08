@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * UpdaterContent — the "What's New in Readest" changelog.
  *

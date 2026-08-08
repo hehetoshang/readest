@@ -28,55 +28,22 @@
  * Adapted from ratatabananana-bit/Readest-google-drive-mod-patcher (AGPL-3.0),
  * used with the author's explicit permission.
  */
-import { authWithCustomTab } from '@/app/auth/utils/nativeAuth';
-import { createPkcePair } from './pkce';
-import { runOAuthFlow, type OAuthClientConfig } from './oauthFlow';
-import { exchangeCode, type FetchFn, type TokenSet } from './tokenEndpoint';
+// Moke embedded reader: this Android OAuth flow is disabled along with the
+// cloud-sync feature set. The native auth helper import was removed with the
+// account system, and the flow helpers are unused now that the body is stubbed.
+// import { authWithCustomTab } from '@/app/auth/utils/nativeAuth';
+// import { createPkcePair } from './pkce';
+// import { runOAuthFlow } from './oauthFlow';
+// import { exchangeCode } from './tokenEndpoint';
+import type { OAuthClientConfig } from './oauthFlow';
+import type { FetchFn, TokenSet } from './tokenEndpoint';
 
 /**
- * Run the Android Custom-Tab OAuth flow and return the resulting tokens. Wires
- * {@link runOAuthFlow} with the Android mechanics: open consent in a Chrome
- * Custom Tab and resolve with the redirect the native bridge captures.
+ * Moke embedded reader: the Android Custom-Tab OAuth flow is disabled along
+ * with the rest of the cloud-sync feature set (its native auth helper was
+ * removed with the account system). The export is kept so the (also-disabled)
+ * OneDrive/Drive connectors still type-check; it throws if ever invoked.
  */
-export const runAndroidOAuth = (config: OAuthClientConfig, fetchFn: FetchFn): Promise<TokenSet> => {
-  const redirectUri = config.redirectUri;
-
-  // `auth_with_custom_tab` opens consent AND resolves with the redirect URL in a
-  // single native round-trip — so it needs the auth URL, which `runOAuthFlow`
-  // only hands to `openUrl`. Bridge the two with a deferred: `openUrl` supplies
-  // the URL, and `awaitRedirect` (invoked first) waits for it before driving the
-  // Custom Tab. The native side recognises the redirect by its reverse-DNS
-  // scheme, so only the auth URL needs to cross over.
-  let provideAuthUrl!: (url: string) => void;
-  const authUrlReady = new Promise<string>((resolve) => {
-    provideAuthUrl = resolve;
-  });
-
-  return runOAuthFlow(config.scope, {
-    createPkcePair,
-    newState: () => crypto.randomUUID(),
-    clientId: config.clientId,
-    openUrl: async (url) => {
-      provideAuthUrl(url);
-    },
-    awaitRedirect: async () => {
-      const authUrl = await authUrlReady;
-      const { redirectUrl } = await authWithCustomTab({ authUrl });
-      return redirectUrl;
-    },
-    redirectUri,
-    authEndpoint: config.authEndpoint,
-    authParams: config.authParams,
-    exchange: ({ code, verifier, redirectUri: uri }) =>
-      exchangeCode(
-        {
-          code,
-          verifier,
-          clientId: config.clientId,
-          redirectUri: uri,
-          tokenEndpoint: config.tokenEndpoint,
-        },
-        fetchFn,
-      ),
-  });
+export const runAndroidOAuth = (_config: OAuthClientConfig, _fetchFn: FetchFn): Promise<TokenSet> => {
+  throw new Error('runAndroidOAuth is disabled in Moke (cloud sync removed)');
 };

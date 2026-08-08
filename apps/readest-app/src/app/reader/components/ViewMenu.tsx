@@ -55,12 +55,11 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
   const { getBookData } = useBookDataStore();
   // const { getConfig } = useBookDataStore();
   const { setSettingsDialogOpen, setSettingsDialogBookKey } = useSettingsStore();
-  const { getView, getViewSettings, getProgress, setViewSettings } = useReaderStore();
-  // const { getViewState } = useReaderStore();
+  const { getView, getViewSettings, getProgress, setViewSettings, getViewState } = useReaderStore();
   // const config = getConfig(bookKey)!;
   const bookData = getBookData(bookKey)!;
   const viewSettings = getViewSettings(bookKey)!;
-  // const viewState = getViewState(bookKey);
+  const viewState = getViewState(bookKey);
 
   const { themeMode, isDarkMode, setThemeMode } = useThemeStore();
   const [isScrolledMode, setScrolledMode] = useState(viewSettings!.scrolled);
