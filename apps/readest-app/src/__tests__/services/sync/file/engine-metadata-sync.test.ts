@@ -92,6 +92,8 @@ const makeStore = (overrides: Partial<LocalStore> = {}): LocalStore => ({
   saveBookCover: async () => {},
   addBookToLibrary: async () => {},
   updateBookMetadata: async () => {},
+  deleteBookLocally: async () => {},
+  markBooksUploaded: async () => {},
   ...overrides,
 });
 
@@ -129,6 +131,121 @@ describe('FileSyncEngine metadata reconciliation (#4756)', () => {
     expect(indexedBook.title).toBe('New Title');
   });
 
+  test('pulls newer remote group membership for a book the device already has (#4942)', async () => {
+    const local = makeLocalBook({ updatedAt: 100 });
+    const remote = makeLocalBook({ groupId: 'g1', groupName: 'Sci-Fi', updatedAt: 200 });
+    const capture: { index?: RemoteLibraryIndex | null } = {};
+    const provider = makeProvider(makeRemoteIndex(remote, 200), null, capture);
+
+    const updateBookMetadata = vi.fn(async (_book: Book) => {});
+    const store = makeStore({ updateBookMetadata });
+
+    const engine = new FileSyncEngine(provider, store);
+    const result = await engine.syncLibrary([local], {
+      strategy: 'silent',
+      syncBooks: false,
+      deviceId: 'pc-device',
+    });
+
+    expect(updateBookMetadata).toHaveBeenCalledTimes(1);
+    const merged = updateBookMetadata.mock.calls[0]![0];
+    expect(merged.groupId).toBe('g1');
+    expect(merged.groupName).toBe('Sci-Fi');
+    expect(result.metadataUpdated).toBe(1);
+
+    const indexedBook = capture.index!.books.find((b) => b.hash === 'h1')!;
+    expect(indexedBook.groupId).toBe('g1');
+    expect(indexedBook.groupName).toBe('Sci-Fi');
+  });
+
+  test('pulls newer remote reading progress onto the library row (#5067)', async () => {
+    // The peer read to 62% and pushed its row. Without this, the shelf keeps
+    // rendering 0% until the user opens the book (which copies the synced
+    // config.progress onto the row), even though the row itself re-sorts to
+    // the front because the merge applies the remote updatedAt.
+    const local = makeLocalBook({ updatedAt: 100 });
+    const remote = makeLocalBook({ progress: [62, 100], updatedAt: 200 });
+    const capture: { index?: RemoteLibraryIndex | null } = {};
+    const provider = makeProvider(makeRemoteIndex(remote, 200), null, capture);
+
+    const updateBookMetadata = vi.fn(async (_book: Book) => {});
+    const store = makeStore({ updateBookMetadata });
+
+    const engine = new FileSyncEngine(provider, store);
+    await engine.syncLibrary([local], {
+      strategy: 'silent',
+      syncBooks: false,
+      deviceId: 'pc-device',
+    });
+
+    expect(updateBookMetadata).toHaveBeenCalledTimes(1);
+    expect(updateBookMetadata.mock.calls[0]![0].progress).toEqual([62, 100]);
+    expect(capture.index!.books.find((b) => b.hash === 'h1')!.progress).toEqual([62, 100]);
+  });
+
+  test('pulls a peer readingStatus change even when local metadata is newer (#4634 semantics)', async () => {
+    // Peer marked the book Finished (status clock 250), then this device
+    // edited the title (book clock 300 > remote 200). Whole-book LWW alone
+    // would never apply the status change.
+    const local = makeLocalBook({
+      title: 'Edited Locally',
+      readingStatus: 'reading',
+      readingStatusUpdatedAt: 100,
+      updatedAt: 300,
+    });
+    const remote = makeLocalBook({
+      title: 'Stale Remote Title',
+      readingStatus: 'finished',
+      readingStatusUpdatedAt: 250,
+      updatedAt: 200,
+    });
+    const capture: { index?: RemoteLibraryIndex | null } = {};
+    const provider = makeProvider(makeRemoteIndex(remote, 200), null, capture);
+
+    const updateBookMetadata = vi.fn(async (_book: Book) => {});
+    const store = makeStore({ updateBookMetadata });
+
+    const engine = new FileSyncEngine(provider, store);
+    const result = await engine.syncLibrary([local], {
+      strategy: 'silent',
+      syncBooks: false,
+      deviceId: 'pc-device',
+    });
+
+    expect(updateBookMetadata).toHaveBeenCalledTimes(1);
+    const merged = updateBookMetadata.mock.calls[0]![0];
+    expect(merged.readingStatus).toBe('finished');
+    expect(merged.readingStatusUpdatedAt).toBe(250);
+    expect(merged.title).toBe('Edited Locally');
+    expect(result.metadataUpdated).toBe(1);
+
+    const indexedBook = capture.index!.books.find((b) => b.hash === 'h1')!;
+    expect(indexedBook.readingStatus).toBe('finished');
+    expect(indexedBook.title).toBe('Edited Locally');
+  });
+
+  test('pulls newer remote tags for a book the device already has', async () => {
+    const local = makeLocalBook({ tags: ['old'], updatedAt: 100 });
+    const remote = makeLocalBook({ tags: ['sf', 'fav'], updatedAt: 200 });
+    const capture: { index?: RemoteLibraryIndex | null } = {};
+    const provider = makeProvider(makeRemoteIndex(remote, 200), null, capture);
+
+    const updateBookMetadata = vi.fn(async (_book: Book) => {});
+    const store = makeStore({ updateBookMetadata });
+
+    const engine = new FileSyncEngine(provider, store);
+    await engine.syncLibrary([local], {
+      strategy: 'silent',
+      syncBooks: false,
+      deviceId: 'pc-device',
+    });
+
+    expect(updateBookMetadata).toHaveBeenCalledTimes(1);
+    expect(updateBookMetadata.mock.calls[0]![0].tags).toEqual(['sf', 'fav']);
+    const indexedBook = capture.index!.books.find((b) => b.hash === 'h1')!;
+    expect(indexedBook.tags).toEqual(['sf', 'fav']);
+  });
+
   test('does not overwrite local metadata when the local copy is newer', async () => {
     const local = makeLocalBook({ title: 'Local Newer', updatedAt: 300 });
     const remote = makeLocalBook({ title: 'Remote Older', updatedAt: 200 });
@@ -149,6 +266,54 @@ describe('FileSyncEngine metadata reconciliation (#4756)', () => {
     expect(result.metadataUpdated).toBe(0);
     const indexedBook = capture.index!.books.find((b) => b.hash === 'h1')!;
     expect(indexedBook.title).toBe('Local Newer');
+  });
+});
+
+describe('FileSyncEngine soft-delete propagation', () => {
+  test('tombstones a soft-deleted book in the pushed index', async () => {
+    const deleted = makeLocalBook({ deletedAt: 500, updatedAt: 100 });
+    const capture: { index?: RemoteLibraryIndex | null } = {};
+    const provider = makeProvider(null, null, capture);
+
+    const engine = new FileSyncEngine(provider, makeStore());
+    await engine.syncLibrary([deleted], {
+      strategy: 'silent',
+      syncBooks: false,
+      deviceId: 'd1',
+    });
+
+    // The deletion travels to peers as a tombstone in library.json.
+    const indexed = capture.index!.books.find((b) => b.hash === 'h1')!;
+    expect(indexed.deletedAt).toBe(500);
+  });
+
+  test('does not re-download a soft-deleted book whose remote dir still exists', async () => {
+    const deleted = makeLocalBook({ deletedAt: 500, updatedAt: 100 });
+    const capture: { index?: RemoteLibraryIndex | null } = {};
+    const provider = makeProvider(null, null, capture);
+    // The GC sweep is separate, so the deleted book's hash dir + file still
+    // exist remotely. Passing the deleted book in (it stays in allBooksMap)
+    // must keep the discovery pass from re-adding it as a download candidate.
+    provider.list = vi.fn(async (path: string) => {
+      if (path.endsWith('/books'))
+        return [{ name: 'h1', path: '/Readest/books/h1', isDirectory: true }];
+      if (path.endsWith('/h1'))
+        return [{ name: 'book.epub', path: '/Readest/books/h1/book.epub', isDirectory: false }];
+      return [];
+    });
+    const addBookToLibrary = vi.fn(async (_book: Book) => {});
+    const store = makeStore({ addBookToLibrary });
+
+    const engine = new FileSyncEngine(provider, store);
+    const result = await engine.syncLibrary([deleted], {
+      strategy: 'silent',
+      syncBooks: false,
+      deviceId: 'd1',
+    });
+
+    expect(addBookToLibrary).not.toHaveBeenCalled();
+    expect(result.booksDownloaded).toBe(0);
+    expect(capture.index!.books.find((b) => b.hash === 'h1')!.deletedAt).toBe(500);
   });
 });
 

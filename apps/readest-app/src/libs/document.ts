@@ -47,6 +47,18 @@ export interface SectionItem {
   createDocument: () => Promise<Document>;
 }
 
+// A Calibre custom column embedded in the OPF as "user metadata"; parsed by
+// foliate-js's getMetadata (see getCalibreUserMetadata in epub.js). `value`
+// is an array for multi-value columns, `extra` is the series index for
+// datatype 'series'.
+export interface CalibreCustomColumn {
+  label: string;
+  name: string;
+  datatype: string;
+  value: string | number | boolean | string[];
+  extra?: number;
+}
+
 export type BookMetadata = {
   // NOTE: the title and author fields should be formatted
   title: string | LanguageMap;
@@ -73,6 +85,9 @@ export type BookMetadata = {
   coverImageFile?: string;
   coverImageUrl?: string;
   coverImageBlobUrl?: string;
+
+  calibreColumns?: CalibreCustomColumn[];
+  feedUrl?: string;
 };
 
 export interface BookDoc {
@@ -337,6 +352,16 @@ export class DocumentLoader {
     );
   }
 
+  private isMd(): boolean {
+    const name = this.file.name?.toLowerCase() ?? '';
+    return (
+      this.file.type === 'text/markdown' ||
+      this.file.type === 'text/x-markdown' ||
+      name.endsWith(`.${EXTS.MD}`) ||
+      name.endsWith('.markdown')
+    );
+  }
+
   public async open(): Promise<{ book: BookDoc; format: BookFormat }> {
     let book = null;
     let format: BookFormat = 'EPUB';
@@ -349,6 +374,13 @@ export class DocumentLoader {
       // conversion the import path runs) and parse that. The managed library
       // stores the already-converted EPUB, but the Android "Open with" transient
       // path points the book at the original .txt, so it reaches us unconverted.
+      // Markdown is rendered to HTML at runtime (no EPUB conversion). Check
+      // this BEFORE isTxt() — a .md served as text/plain would otherwise be
+      // grabbed by the TXT->EPUB path above.
+      if (this.isMd()) {
+        const { makeMarkdownBook } = await import('@/utils/md');
+        return { book: await makeMarkdownBook(this.file), format: 'MD' };
+      }
       if (this.isTxt()) {
         const { TxtToEpubConverter } = await import('@/utils/txt');
         const { file: epubFile } = await new TxtToEpubConverter().convert({ file: this.file });
@@ -435,7 +467,14 @@ export const getDirection = (doc: Document) => {
     }
   }
   const vertical = writingMode === 'vertical-rl' || writingMode === 'vertical-lr';
-  const rtl = doc.body.dir === 'rtl' || direction === 'rtl' || doc.documentElement.dir === 'rtl';
+  // `vertical-rl` (Japanese/Chinese vertical) advances columns right-to-left even
+  // though its computed `direction` stays `ltr`, so the writing mode itself marks
+  // it RTL. Without this the reading ruler and page turns run backwards (#4865).
+  const rtl =
+    writingMode === 'vertical-rl' ||
+    doc.body.dir === 'rtl' ||
+    direction === 'rtl' ||
+    doc.documentElement.dir === 'rtl';
   return { vertical, rtl };
 };
 

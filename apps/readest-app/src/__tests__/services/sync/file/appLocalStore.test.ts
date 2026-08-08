@@ -44,6 +44,7 @@ beforeEach(() => {
       savedLibrary = books;
     }),
     generateCoverImageUrl: vi.fn(async () => 'blob:cover'),
+    deleteBook: vi.fn(async () => {}),
   } as unknown as AppService;
   envConfig = { getAppService: async () => appService } as unknown as EnvConfigType;
 });
@@ -83,5 +84,44 @@ describe('createAppLocalStore — library hydration (data-loss guard)', () => {
 
     expect(appService.loadLibraryBooks).not.toHaveBeenCalled();
     expect(savedLibrary!.map((b) => b.hash).sort()).toEqual(['a', 'b', 'c']);
+  });
+
+  test('deleteBookLocally removes the managed copy and persists the tombstone (#4860)', async () => {
+    useLibraryStore.getState().setLibrary([makeBook('a'), makeBook('b')]);
+
+    await makeStore().deleteBookLocally(makeBook('a', { deletedAt: 500 }));
+
+    // The managed local copy is removed via the 'local' delete action.
+    expect(appService.deleteBook).toHaveBeenCalledWith(
+      expect.objectContaining({ hash: 'a' }),
+      'local',
+    );
+    // The tombstone is persisted and the other book survives.
+    expect(savedLibrary!.map((b) => b.hash).sort()).toEqual(['a', 'b']);
+    expect(savedLibrary!.find((b) => b.hash === 'a')!.deletedAt).toBe(500);
+    // The deleted book drops off the visible shelf.
+    expect(useLibraryStore.getState().visibleLibrary.map((b) => b.hash)).toEqual(['b']);
+  });
+
+  test('markBooksUploaded stamps the live rows, not the engine snapshot (#5084)', async () => {
+    // The engine captured `a` at the start of a long run; meanwhile the user
+    // read it and saved progress. The stamp must not roll that back.
+    useLibraryStore.getState().setLibrary([makeBook('a', { progress: [42, 100] }), makeBook('b')]);
+
+    await makeStore().markBooksUploaded(['a'], 900);
+
+    const stamped = savedLibrary!.find((b) => b.hash === 'a')!;
+    expect(stamped.uploadedAt).toBe(900);
+    expect(stamped.progress).toEqual([42, 100]);
+    // Books the engine didn't confirm keep their (absent) cloud state.
+    expect(savedLibrary!.find((b) => b.hash === 'b')!.uploadedAt).toBeFalsy();
+  });
+
+  test('markBooksUploaded hydrates from disk when the store is unloaded', async () => {
+    await makeStore().markBooksUploaded(['a'], 900);
+
+    expect(appService.loadLibraryBooks).toHaveBeenCalled();
+    expect(savedLibrary!.map((b) => b.hash).sort()).toEqual(['a', 'b']);
+    expect(savedLibrary!.find((b) => b.hash === 'a')!.uploadedAt).toBe(900);
   });
 });

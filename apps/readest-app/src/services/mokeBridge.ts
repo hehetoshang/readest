@@ -96,7 +96,7 @@ function withMokeContext(data: Record<string, unknown>): Record<string, unknown>
   if (typeof window === 'undefined') return data;
 
   const mokeBookId = (window as any).__MOKE_BOOK_ID;
-  if (!mokeBookId || data.moke_book_id) return data;
+  if (!mokeBookId || data['moke_book_id']) return data;
 
   return {
     ...data,

@@ -39,6 +39,10 @@ const nextConfig = {
   // In standalone/dev mode we omit basePath to keep the original behaviour,
   // unless an embedded host overrides it via NEXT_PUBLIC_EMBEDDED_BASE_PATH.
   basePath: exportOutput ? '/readest' : (embeddedBasePath || ''),
+  // Emit browser source maps for the Tauri export build so Sentry can
+  // symbolicate crashes. `scripts/upload-sourcemaps.mjs` uploads them after the
+  // build and strips the .map files, so they never ship inside the app bundle.
+  productionBrowserSourceMaps: exportOutput,
   // Monorepo: trace from the repo root so workspace packages land in the
   // standalone tree. Only relevant to — and only set for — the Docker build.
   outputFileTracingRoot: standaloneOutput ? path.join(__dirname, '../../') : undefined,
@@ -81,6 +85,9 @@ const nextConfig = {
       // can't find fflate (only installed in this app's node_modules).
       fflate: path.resolve(__dirname, 'node_modules/fflate'),
       ...(appPlatform !== 'web' ? { '@tursodatabase/database-wasm': false } : {}),
+      ...(isServer && appPlatform === 'web'
+        ? { '@readest/turso-database-wasm/webpack': false, 'jieba-wasm': false }
+        : {}),
     };
     return config;
   },

@@ -2,6 +2,7 @@ import type { Book, BookLookupIndex } from '@/types/book';
 import type { AppService, OsPlatform } from '@/types/system';
 import type { SystemSettings } from '@/types/settings';
 import { transferManager } from '@/services/transferManager';
+import { isReadestCloudStorageActive } from '@/services/sync/cloudSyncProvider';
 import { normalizeFilePathForIndex } from '@/services/bookService';
 import { isContentURI, isValidURL } from '@/utils/misc';
 import { isPseStreamFileName } from '@/services/opds/pseStream';
@@ -237,11 +238,17 @@ export async function ingestFile(
   // they are equivalent to a hash-copy book — only the local storage
   // location differs. uploadBook reads straight from book.filePath in that
   // case; downloads on other devices land in Books/<hash>/ as a normal copy.
+  // Readest Cloud storage is written only when Readest Cloud is one of the
+  // enabled providers (#5062 lets several run at once). When it is unchecked,
+  // this gate is false and the file-sync engine mirrors the import instead
+  // (including Sent books, which reach other devices via each enabled backend
+  // whose syncBooks toggle is on).
   if (
     !opts.transient &&
     isLoggedIn &&
     !book.uploadedAt &&
-    (opts.forceUpload || settings.autoUpload)
+    (opts.forceUpload || settings.autoUpload) &&
+    isReadestCloudStorageActive(settings)
   ) {
     transferManager.queueUpload(book);
   }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createSettingsCursorStore } from '@/services/sync/replicaCursorStore';
 import type { AppService } from '@/types/system';

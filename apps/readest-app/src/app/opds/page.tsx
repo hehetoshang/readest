@@ -18,6 +18,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useCustomOPDSStore } from '@/store/customOPDSStore';
 import { transferManager } from '@/services/transferManager';
+import { isReadestCloudStorageActive } from '@/services/sync/cloudSyncProvider';
 import { useTransferQueue } from '@/hooks/useTransferQueue';
 import { useTheme } from '@/hooks/useTheme';
 import { useLibrary } from '@/hooks/useLibrary';
@@ -28,6 +29,7 @@ import { OPDSFeed, OPDSPublication, OPDSSearch, REL } from '@/types/opds';
 import {
   expandOPDSSearchTemplate,
   getFileExtFromPath,
+  getSafeDOMParserMimeType,
   isSearchLink,
   looksLikeXMLContent,
   MIME,
@@ -56,6 +58,7 @@ import { normalizeOPDSCustomHeaders } from './utils/customHeaders';
 import { closeOPDSBrowser, stashOPDSReturnTarget } from './utils/opdsClose';
 import { findExistingBookForPublication } from './utils/findExistingBook';
 import Dialog from '@/components/Dialog';
+import { uniqueId } from '@/utils/misc';
 
 type ViewMode = 'feed' | 'publication' | 'search' | 'loading' | 'error';
 
@@ -305,7 +308,7 @@ export default function BrowserPage() {
           } else {
             const contentType = res.headers.get('Content-Type') ?? MIME.HTML;
             const type = parseMediaType(contentType)?.mediaType ?? MIME.HTML;
-            const htmlDoc = new DOMParser().parseFromString(text, type as DOMParserSupportedType);
+            const htmlDoc = new DOMParser().parseFromString(text, getSafeDOMParserMimeType(type));
 
             if (!htmlDoc.head) {
               stashOPDSReturnTarget(searchParams);
@@ -587,7 +590,7 @@ export default function BrowserPage() {
 
           const pathname = decodeURIComponent(new URL(url).pathname);
           const ext = getFileExtFromMimeType(parsed?.mediaType) || getFileExtFromPath(pathname);
-          const basename = pathname.replaceAll('/', '_');
+          const basename = uniqueId();
           const filename = ext ? `${basename}.${ext}` : basename;
           let dstFilePath = await appService?.resolveFilePath(filename, 'Cache');
           console.log('Downloading to:', url, dstFilePath);
@@ -625,7 +628,13 @@ export default function BrowserPage() {
                 console.error('OPDS: failed to update source map:', sourceMapError);
               }
             }
-            if (user && book && !book.uploadedAt && settings.autoUpload) {
+            if (
+              user &&
+              book &&
+              !book.uploadedAt &&
+              settings.autoUpload &&
+              isReadestCloudStorageActive(settings)
+            ) {
               setTimeout(() => {
                 transferManager.queueUpload(book);
               }, 3000);

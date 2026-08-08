@@ -7,6 +7,7 @@ packages:
   - ../vendor/foliate-js
 
 allowBuilds:
+  '@sentry/cli': true
   core-js: true
   edgedriver: true
   esbuild: true

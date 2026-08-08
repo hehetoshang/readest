@@ -32,6 +32,22 @@ describe('statistics migration', () => {
     expect(names).toContain('readest_stat_sync_state');
   });
 
+  it('is idempotent when the page_stat view already exists (READEST-13)', async () => {
+    // A DB imported from KOReader (or left by a partially-applied migration)
+    // already has a page_stat view but no migration record. turso ignores
+    // IF NOT EXISTS on CREATE VIEW, so a non-idempotent migration throws
+    // "View page_stat already exists" here.
+    const imported = await NodeDatabaseService.open(':memory:');
+    await imported.execute('CREATE VIEW page_stat AS SELECT 1 AS x');
+
+    await expect(migrate(imported, getMigrations('statistics'))).resolves.toBeUndefined();
+
+    const views = await imported.select<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type = 'view'`,
+    );
+    expect(views.map((v) => v.name)).toContain('page_stat');
+  });
+
   it('seeds the numbers helper table 1..1000', async () => {
     const rows = await db.select<{ c: number }>(`SELECT COUNT(*) AS c FROM numbers`);
     expect(rows[0]!.c).toBe(1000);
@@ -103,6 +119,22 @@ describe('StatisticsDb', () => {
     expect(book!.total_read_time).toBe(8);
   });
 
+  it('serializes concurrent applyRemoteEvents without nesting transactions (READEST-N)', async () => {
+    // Two pulls racing on the shared connection (split-view trackers) must not
+    // open a BEGIN inside a BEGIN ("cannot start a transaction within a transaction").
+    const a = stats.applyRemoteEvents(
+      [{ bookMd5: 'ra', title: 'RA', authors: '' }],
+      [{ bookMd5: 'ra', page: 1, startTime: 400, duration: 3, totalPages: 10 }],
+    );
+    const b = stats.applyRemoteEvents(
+      [{ bookMd5: 'rb', title: 'RB', authors: '' }],
+      [{ bookMd5: 'rb', page: 1, startTime: 401, duration: 4, totalPages: 10 }],
+    );
+    await expect(Promise.all([a, b])).resolves.toBeDefined();
+    expect((await stats.getBookByMd5('ra'))!.total_read_time).toBe(3);
+    expect((await stats.getBookByMd5('rb'))!.total_read_time).toBe(4);
+  });
+
   it('reads and writes sync cursors', async () => {
     expect(await stats.getCursor('push')).toBe(0);
     await stats.setCursor('push', 1234);
@@ -118,5 +150,50 @@ describe('StatisticsDb', () => {
     // exactly one row for this md5
     const rows = await stats.getEventsForPush(-1); // no events; just exercise no crash
     void rows;
+  });
+
+  it('returns null until enough page data exists for a median', async () => {
+    const id = await stats.upsertBook({ bookMd5: 'm-few', title: 'T', authors: 'A' });
+    for (let i = 0; i < 4; i++) {
+      await stats.insertPageEvent(id, {
+        page: i,
+        startTime: 100 + i,
+        duration: 10,
+        totalPages: 50,
+      });
+    }
+    expect(await stats.getMedianPageDurationSecs(id)).toBeNull();
+  });
+
+  it('takes the median by duration value, not by recency (odd count)', async () => {
+    const id = await stats.upsertBook({ bookMd5: 'm-odd', title: 'T', authors: 'A' });
+    // Inserted in ascending start_time; durations are NOT sorted by value, so the
+    // median must sort by value before picking the middle (recency-middle is 50).
+    const byTime = [30, 10, 50, 20, 40];
+    for (let i = 0; i < byTime.length; i++) {
+      await stats.insertPageEvent(id, {
+        page: i,
+        startTime: 100 + i,
+        duration: byTime[i]!,
+        totalPages: 50,
+      });
+    }
+    // Sorted: [10, 20, 30, 40, 50] -> median 30.
+    expect(await stats.getMedianPageDurationSecs(id)).toBe(30);
+  });
+
+  it('averages the two middle durations (even count)', async () => {
+    const id = await stats.upsertBook({ bookMd5: 'm-even', title: 'T', authors: 'A' });
+    const byTime = [60, 10, 50, 20, 40, 30];
+    for (let i = 0; i < byTime.length; i++) {
+      await stats.insertPageEvent(id, {
+        page: i,
+        startTime: 100 + i,
+        duration: byTime[i]!,
+        totalPages: 50,
+      });
+    }
+    // Sorted: [10, 20, 30, 40, 50, 60] -> (30 + 40) / 2 = 35.
+    expect(await stats.getMedianPageDurationSecs(id)).toBe(35);
   });
 });

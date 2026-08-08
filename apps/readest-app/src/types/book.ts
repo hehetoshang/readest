@@ -1,6 +1,8 @@
 import { BookMetadata } from '@/libs/document';
 import { TTSHighlightOptions } from '@/services/tts/types';
+import { TTSHighlightGranularity } from '@/services/tts/types';
 import { TTSMediaMetadataMode } from '@/services/tts/types';
+import { TTSPlayerStyle } from '@/services/tts/types';
 import type { AnnotationLinkType } from '@/utils/deeplink';
 import { AnnotationToolType } from './annotator';
 
@@ -208,6 +210,8 @@ export interface BookLayout {
   scrollingOverlap: number;
   allowScript: boolean;
   hideScrollbar: boolean;
+  /* Auto Scroll (#4998) speed as a percentage; 100 = AUTO_SCROLL_BASE_PX_PER_SEC. */
+  autoScrollSpeed: number;
 }
 
 export interface BookStyle {
@@ -270,7 +274,9 @@ export interface BookLanguage {
   convertChineseVariant: ConvertChineseVariant;
 }
 
-export type ProgressBarMode = 'remaining' | 'progress' | 'battery' | 'time' | 'all' | 'none';
+// 'push' slides the whole strip; 'slide' and 'curl' layer the outgoing page
+// over the still incoming page (Apple Books style, needs View Transitions).
+export type PageTurnStyle = 'push' | 'slide' | 'curl';
 export interface ViewConfig {
   sideBarTab: string;
   uiLanguage: string;
@@ -289,13 +295,12 @@ export interface ViewConfig {
   use24HourClock: boolean;
   showCurrentBatteryStatus: boolean;
   showBatteryPercentage: boolean;
-  tapToToggleFooter: boolean;
   showPaginationButtons: boolean;
   progressStyle: 'percentage' | 'fraction' | 'reference';
   referencePageCount: number;
-  progressInfoMode: ProgressBarMode;
 
   animated: boolean;
+  pageTurnStyle: PageTurnStyle;
   isEink: boolean;
   isColorEink: boolean;
 
@@ -310,11 +315,14 @@ export interface ViewConfig {
 
 export interface TTSConfig {
   ttsRate: number;
+  ttsSentenceGap: number;
+  ttsParagraphGap: number;
   ttsVoice: string;
   ttsLocation: string;
-  showTTSBar: boolean;
   ttsHighlightOptions: TTSHighlightOptions;
+  ttsHighlightGranularity: TTSHighlightGranularity;
   ttsMediaMetadata: TTSMediaMetadataMode;
+  ttsPlayerStyle: TTSPlayerStyle;
 }
 
 export interface TranslatorConfig {
@@ -340,6 +348,11 @@ export interface NoteExportConfig {
   useCustomTemplate: boolean;
   customTemplate: string;
   exportAsPlainText: boolean;
+  // Highlight colors/styles to omit from the export. Empty arrays export
+  // everything; storing exclusions keeps colors/styles added later included
+  // by default (#4801).
+  excludedColors: HighlightColor[];
+  excludedStyles: HighlightStyle[];
 }
 
 export interface AnnotatorConfig {

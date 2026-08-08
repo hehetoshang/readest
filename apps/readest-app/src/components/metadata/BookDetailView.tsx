@@ -19,6 +19,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useEnv } from '@/context/EnvContext';
 import {
   formatAuthors,
+  formatCalibreColumnValue,
   formatDate,
   formatBytes,
   formatLanguage,
@@ -137,13 +138,18 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
                     label={_('Remove from Cloud & Device')}
                     onClick={onDelete}
                   />
-                  <MenuItem
-                    noIcon
-                    transient
-                    label={_('Remove from Cloud Only')}
-                    onClick={onDeleteCloudBackup}
-                    disabled={!book.uploadedAt}
-                  />
+                  {/* Offered only where a cloud-only removal means something: a
+                      third-party provider mirrors the library, so it would just
+                      re-upload the still-local book on its next sync (#5084). */}
+                  {onDeleteCloudBackup && (
+                    <MenuItem
+                      noIcon
+                      transient
+                      label={_('Remove from Cloud Only')}
+                      onClick={onDeleteCloudBackup}
+                      disabled={!book.uploadedAt}
+                    />
+                  )}
                   <MenuItem
                     noIcon
                     transient
@@ -273,6 +279,26 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
                     {metadata?.identifier || _('Unknown')}
                   </p>
                 </div>
+                {/*
+                  Calibre custom columns embedded in the OPF (#4811). Column
+                  names are user content, not translation keys. The identifier
+                  cell above spans the full row on mobile, so alternate the
+                  end-aligned style from a fresh even/odd count here.
+                */}
+                {metadata?.calibreColumns?.map((column, index) => (
+                  <div
+                    key={column.label}
+                    className={clsx(
+                      'overflow-hidden',
+                      index % 2 === 1 && 'pe-1 text-end sm:text-start',
+                    )}
+                  >
+                    <span className='font-bold'>{column.name}</span>
+                    <p className='text-neutral-content line-clamp-3 text-sm'>
+                      {formatCalibreColumnValue(column)}
+                    </p>
+                  </div>
+                ))}
                 {/*
                   Only books imported in-place (or files opened directly via the
                   OS, e.g. Android "Open with Readest") keep a `filePath`; books

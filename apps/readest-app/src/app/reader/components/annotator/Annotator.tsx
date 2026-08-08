@@ -109,7 +109,8 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   const getView = useReaderStore((s) => s.getView);
   const getViewsById = useReaderStore((s) => s.getViewsById);
   const getViewSettings = useReaderStore((s) => s.getViewSettings);
-  const { setNotebookVisible, setNotebookNewAnnotation } = useNotebookStore();
+  const { setNotebookVisible, setNotebookNewAnnotation, setNotebookNewHighlightId } =
+    useNotebookStore();
   const { clearBooknotesNav } = useSidebarStore();
   const { listenToNativeTouchEvents } = useDeviceControlStore();
   const { loadCustomDictionaries } = useCustomDictionaryStore();
@@ -163,7 +164,6 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   // would otherwise tear down the dialog state immediately.
   const [clearAnnotationsCount, setClearAnnotationsCount] = useState(0);
   const [exportData, setExportData] = useState<{
-    booknotes: BookNote[];
     booknoteGroups: { [href: string]: BooknoteGroup };
   } | null>(null);
 
@@ -322,6 +322,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     handleNativeTouchMove,
     handlePointerCancel,
     handlePointerUp,
+    handleDoubleClick,
     handleSelectionchange,
     handleShowPopup,
     handleUpToPopup,
@@ -373,7 +374,9 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     const opts = { passive: false };
     detail.doc?.addEventListener('touchstart', handleTouchStart, opts);
     detail.doc?.addEventListener('touchmove', handleTouchmove, opts);
-    detail.doc?.addEventListener('touchend', handleTouchEnd);
+    // Bound to the section so a selectionchange deferred during the drag can
+    // be processed (and the popup shown once) when the gesture ends.
+    detail.doc?.addEventListener('touchend', handleTouchEnd.bind(null, doc, index));
     // Re-arm the instant quick action at the start of each gesture. Android does
     // this via the native-touch touchstart above; iOS/desktop have no such path,
     // and a single iOS long-press emits multiple selectionchange events for the
@@ -611,6 +614,33 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     enableNativeTouch: !!appService?.isAndroidApp,
     listenToNativeTouchEvents,
   });
+
+  // A double-click / touch double-tap on a word selects that word and raises the
+  // quick action (if one is configured) or the annotation toolbar — like a
+  // long-press selection. The iframe posts `iframe-double-click` (gated by the
+  // user's double-click setting) with coordinates in the originating section's
+  // viewport; resolve the visible section's doc/index the way the native-touch
+  // bridge does, then select the word under the point.
+  useEffect(() => {
+    const handleDoubleClickMessage = (msg: MessageEvent) => {
+      const data = msg.data;
+      if (!data || data.bookKey !== bookKey || data.type !== 'iframe-double-click') return;
+      const renderer = view?.renderer;
+      const contents = renderer?.getContents?.() ?? [];
+      const content = contents.find((c) => c.index === renderer?.primaryIndex) ?? contents[0];
+      const doc = content?.doc;
+      const index = content?.index;
+      if (!doc || index === undefined) return;
+      // A double-click is a deliberate act-on-word gesture, so let the quick
+      // action fire without the touch long-press hold gate (matching a mouse
+      // selection, which sets this to 0 on pointerdown).
+      pointerDownTimeRef.current = 0;
+      void handleDoubleClick(doc, index, data.clientX, data.clientY);
+    };
+    window.addEventListener('message', handleDoubleClickMessage);
+    return () => window.removeEventListener('message', handleDoubleClickMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookKey, view]);
 
   // Word Lens: open the dictionary popup for a tapped glossed word. The tap is
   // detected in the iframe click handler (iframeEventHandlers.ts), which sends
@@ -1081,12 +1111,12 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     handleDismissPopupAndSelection();
   };
 
-  const handleHighlight = (update = false, highlightStyle?: HighlightStyle) => {
-    if (!selection || !selection.text) return;
+  const handleHighlight = (update = false, highlightStyle?: HighlightStyle): BookNote | null => {
+    if (!selection || !selection.text) return null;
     setHighlightOptionsVisible(true);
     const { booknotes: annotations = [] } = config;
     const cfi = view?.getCFI(selection.index, selection.range);
-    if (!cfi) return;
+    if (!cfi) return null;
     const style = highlightStyle || settings.globalReadSettings.highlightStyle;
     const color = settings.globalReadSettings.highlightStyles[style];
     setSelectedStyle(style);
@@ -1111,6 +1141,9 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
         !annotation.deletedAt,
     );
     const views = getViewsById(bookKey.split('-')[0]!);
+    // Only a brand-new highlight is a placeholder the cancel flow may remove;
+    // restyling/toggling an existing one must never tear down the user's record.
+    let created: BookNote | null = null;
     if (existingIndex !== -1) {
       const existing = annotations[existingIndex]!;
       // Tear down both the original anchor and any global fan-outs that
@@ -1142,12 +1175,14 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
       annotations.push(annotation);
       views.forEach((view) => view?.addAnnotation(annotation));
       setSelection({ ...selection, cfi, annotated: true });
+      created = annotation;
     }
 
     const updatedConfig = updateBooknotes(bookKey, annotations);
     if (updatedConfig) {
       saveConfig(envConfig, bookKey, updatedConfig, settings);
     }
+    return created;
   };
 
   const handleCreateTTSHighlight = (event: CustomEvent) => {
@@ -1214,9 +1249,13 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     if (!selection || !selection.text) return;
     const { sectionHref: href } = progress;
     selection.href = href;
-    handleHighlight(true);
+    const created = handleHighlight(true);
     setNotebookVisible(true);
     setNotebookNewAnnotation(selection);
+    // Remember the eagerly-created highlight so the notebook can remove it if the
+    // note is never saved. A restyle of an existing highlight returns null — that
+    // record predates this flow and must survive a cancel (#4791).
+    setNotebookNewHighlightId(created?.id ?? null);
     handleDismissPopup();
   };
 
@@ -1509,7 +1548,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
       });
     });
 
-    setExportData({ booknotes, booknoteGroups });
+    setExportData({ booknoteGroups });
     setShowExportDialog(true);
   };
 
@@ -1785,7 +1824,6 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
           bookHash={bookData.book.hash}
           bookTitle={bookData.book.title}
           bookAuthor={bookData.book.author || ''}
-          booknotes={exportData.booknotes}
           booknoteGroups={exportData.booknoteGroups}
           onCancel={handleCancelExport}
           onExport={handleConfirmExport}

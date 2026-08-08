@@ -43,6 +43,9 @@ function bindLifecycle(): void {
  * leaves this class.
  */
 export class StatisticsDb {
+  // Serializes applyRemoteEvents so two concurrent pulls can't nest BEGINs.
+  private applyRemoteLock: Promise<void> = Promise.resolve();
+
   private constructor(private readonly db: DatabaseService) {}
 
   /** Production entry point — opens + migrates statistics.db (per-tab singleton). */
@@ -133,6 +136,32 @@ export class StatisticsDb {
     );
   }
 
+  /**
+   * Returns the median duration of time spent on each page in seconds. Returns
+   * `null` if sufficient data is not available.
+   *
+   * Use the median since reading times are skewed; thus the median must be
+   * used to get the middle value.
+   */
+  async getMedianPageDurationSecs(idBook: number): Promise<number | null> {
+    const PAGE_THRESHOLD = 5;
+    const rows = await this.db.select<{ duration: number }>(
+      `SELECT duration
+         FROM page_stat_data
+         WHERE id_book = ?
+         ORDER BY start_time DESC
+         LIMIT 50`,
+      [idBook],
+    );
+    if (rows.length < PAGE_THRESHOLD) return null;
+    // The query orders by recency; sort by value so the middle is the true median.
+    const pageDurations = rows.map((d) => d['duration']).sort((a, b) => a - b);
+    const mid = Math.floor(pageDurations.length / 2);
+    return pageDurations.length % 2 !== 0
+      ? (pageDurations[mid] ?? 0)
+      : ((pageDurations[mid - 1] ?? 0) + (pageDurations[mid] ?? 0)) / 2;
+  }
+
   async getBookByMd5(md5: string): Promise<BookRow | null> {
     const rows = await this.db.select<BookRow>(`SELECT * FROM book WHERE md5 = ? LIMIT 1`, [md5]);
     return rows[0] ?? null;
@@ -187,29 +216,42 @@ export class StatisticsDb {
 
   async applyRemoteEvents(books: StatBook[], events: PageStatEvent[]): Promise<void> {
     if (books.length === 0 && events.length === 0) return;
-    // One transaction for the whole pulled batch: a single commit instead of
-    // O(rows) fsyncs, and the apply is atomic (a failed pull leaves no partial
-    // state). Critical when a fresh device backfills tens of thousands of rows.
-    await this.db.execute('BEGIN');
+    // Serialize against other pulls: the statistics connection is shared across
+    // ReadingStatsTracker instances (split view), and a second concurrent pull
+    // would open a BEGIN inside this one's still-open BEGIN ("cannot start a
+    // transaction within a transaction", Sentry READEST-N). The per-op native
+    // lock can't make this multi-statement transaction atomic on its own.
+    const prev = this.applyRemoteLock;
+    let release!: () => void;
+    this.applyRemoteLock = new Promise<void>((resolve) => (release = resolve));
+    await prev;
     try {
-      const idByMd5 = new Map<string, number>();
-      for (const b of books) idByMd5.set(b.bookMd5, await this.upsertBook(b));
-      // Books referenced only by events (no metadata record) get a placeholder row.
-      const touched = new Set<number>();
-      for (const e of events) {
-        let id = idByMd5.get(e.bookMd5);
-        if (id === undefined) {
-          id = await this.ensureBookId(e.bookMd5);
-          idByMd5.set(e.bookMd5, id);
+      // One transaction for the whole pulled batch: a single commit instead of
+      // O(rows) fsyncs, and the apply is atomic (a failed pull leaves no partial
+      // state). Critical when a fresh device backfills tens of thousands of rows.
+      await this.db.execute('BEGIN');
+      try {
+        const idByMd5 = new Map<string, number>();
+        for (const b of books) idByMd5.set(b.bookMd5, await this.upsertBook(b));
+        // Books referenced only by events (no metadata record) get a placeholder row.
+        const touched = new Set<number>();
+        for (const e of events) {
+          let id = idByMd5.get(e.bookMd5);
+          if (id === undefined) {
+            id = await this.ensureBookId(e.bookMd5);
+            idByMd5.set(e.bookMd5, id);
+          }
+          await this.insertPageEvent(id, e);
+          touched.add(id);
         }
-        await this.insertPageEvent(id, e);
-        touched.add(id);
+        for (const id of touched) await this.recomputeBookTotals(id);
+        await this.db.execute('COMMIT');
+      } catch (err) {
+        await this.db.execute('ROLLBACK');
+        throw err;
       }
-      for (const id of touched) await this.recomputeBookTotals(id);
-      await this.db.execute('COMMIT');
-    } catch (err) {
-      await this.db.execute('ROLLBACK');
-      throw err;
+    } finally {
+      release();
     }
   }
 

@@ -19,7 +19,13 @@ import android.view.KeyEvent
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.WindowInsetsController
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
+import android.view.PixelCopy
 import android.webkit.WebView
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
@@ -114,6 +120,42 @@ class PurchaseProductRequestArgs {
     val productId: String? = null
 }
 
+@InvokeArg
+class UpdateReadingWidgetBookArgs {
+    var hash: String = ""
+    var title: String = ""
+    var author: String = ""
+    var percent: Int = 0
+    var coverPath: String = ""
+}
+
+@InvokeArg
+class CaptureWebviewRegionArgs {
+    var x: Float = 0f
+    var y: Float = 0f
+    var width: Float = 0f
+    var height: Float = 0f
+}
+
+@InvokeArg
+class UpdateReadingWidgetTtsArgs {
+    var active: Boolean = false
+    var playing: Boolean = false
+}
+
+@InvokeArg
+class UpdateReadingWidgetRequestArgs {
+    var books: List<UpdateReadingWidgetBookArgs> = emptyList()
+    var sectionTitle: String = ""
+    var emptyTitle: String = ""
+    // Nullable — omitted from the snapshot when the caller does not send a tts object.
+    // Note: Tauri parseArgs uses Gson for deserialization; a nullable nested @InvokeArg
+    // field is set to null when the key is absent from the JSON payload, which is the
+    // expected behavior. If deserialization issues arise at runtime, fall back to two
+    // flat optional fields (ttsActive: Boolean? / ttsPlaying: Boolean?).
+    var tts: UpdateReadingWidgetTtsArgs? = null
+}
+
 data class ProductData(
     val id: String,
     val title: String,
@@ -149,6 +191,7 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
     private val implementation = NativeBridge()
     private var redirectScheme = "readest"
     private var redirectHost = "auth-callback"
+    private var webViewRef: WebView? = null
     private val billingManager by lazy {
         BillingManager(activity)
     }
@@ -174,6 +217,7 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
 
     override fun load(webView: WebView) {
         instance = this
+        webViewRef = webView
         super.load(webView)
         handleIntent(activity.intent)
     }
@@ -189,7 +233,14 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         // OAuth callback uses a custom scheme on intent.data and is handled
         // separately from any user-shared content.
         intent.data?.let { uri ->
-            if (uri.scheme == "readest" && uri.host == "auth-callback") {
+            val scheme = uri.scheme ?: ""
+            val isReadestAuth = scheme == "readest" && uri.host == "auth-callback"
+            // Google Drive sign-in uses the reverse-DNS "iOS URL scheme"
+            // (com.googleusercontent.apps.<id>:/oauthredirect) registered as a
+            // BROWSABLE deep link; resolve it through the same pending invoke as
+            // the Supabase readest://auth-callback flow.
+            val isGoogleOAuth = scheme.startsWith("com.googleusercontent.apps.")
+            if (isReadestAuth || isGoogleOAuth) {
                 val result = JSObject().apply {
                     put("redirectUrl", uri.toString())
                 }
@@ -419,8 +470,10 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
 
                     val itemUri = resolver.insert(collection, values)
                     if (itemUri == null) {
+                        val error = "MediaStore rejected $displayName ($mimeType) in $album"
+                        Log.e("NativeBridge", error)
                         r.put("success", false)
-                        r.put("error", "Failed to create MediaStore entry")
+                        r.put("error", error)
                         return@withContext r
                     }
 
@@ -441,8 +494,12 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
                     r.put("success", true)
                     r.put("uri", itemUri.toString())
                 } catch (e: Exception) {
+                    // OEM MediaStore implementations diverge on what they accept, so
+                    // the exception is the only thing that identifies a device-specific
+                    // failure from a bug report.
+                    Log.e("NativeBridge", "Failed to save image to gallery", e)
                     r.put("success", false)
-                    r.put("error", e.message)
+                    r.put("error", "${e.javaClass.simpleName}: ${e.message}")
                 }
                 r
             }
@@ -1048,6 +1105,40 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         }
     }
 
+    @Command
+    fun update_reading_widget(invoke: Invoke) {
+        val args = invoke.parseArgs(UpdateReadingWidgetRequestArgs::class.java)
+        pluginScope.launch {
+            withContext(Dispatchers.IO) {
+                val books = org.json.JSONArray()
+                for (book in args.books) {
+                    ReadingWidgetStore.writeThumbnail(activity, book.hash, book.coverPath, book.percent)
+                    books.put(
+                        org.json.JSONObject()
+                            .put("hash", book.hash)
+                            .put("title", book.title)
+                            .put("author", book.author)
+                            .put("percent", book.percent)
+                    )
+                }
+                val snapshot = org.json.JSONObject()
+                    .put("books", books)
+                    .put("sectionTitle", args.sectionTitle)
+                    .put("emptyTitle", args.emptyTitle)
+                args.tts?.let { tts ->
+                    snapshot.put(
+                        "tts",
+                        org.json.JSONObject()
+                            .put("active", tts.active)
+                            .put("playing", tts.playing)
+                    )
+                }
+                ReadingWidgetStore.writeSnapshot(activity, snapshot.toString())
+            }
+            if (isActive) invoke.resolve()
+        }
+    }
+
     // ── Sync passphrase keychain ──────────────────────────────────────
     // Backed by EncryptedSharedPreferences, which derives an AES-GCM
     // master key from AndroidKeystore and stores the value-of-keys map
@@ -1128,6 +1219,71 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         } catch (e: Exception) {
             Log.e("NativeBridgePlugin", "is_sync_keychain_available failed", e)
             ret.put("available", false)
+            ret.put("error", e.message ?: "unknown")
+        }
+        invoke.resolve(ret)
+    }
+
+    // ── Keyed secure key-value store ──────────────────────────────────
+    // Same EncryptedSharedPreferences backing as the sync passphrase, but
+    // a generic keyed store (one prefs file, the caller's `key` as the
+    // entry key) so secrets like the Google Drive token set persist the
+    // same way without each needing its own command.
+
+    private val secureItemsPrefsName = "readest_secure_items_v1"
+
+    private fun openSecureItemsPrefs(): android.content.SharedPreferences {
+        val masterKey = androidx.security.crypto.MasterKey.Builder(activity)
+            .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return androidx.security.crypto.EncryptedSharedPreferences.create(
+            activity,
+            secureItemsPrefsName,
+            masterKey,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
+
+    @Command
+    fun set_secure_item(invoke: Invoke) {
+        val args = invoke.parseArgs(SecureItemSetArgs::class.java)
+        val ret = JSObject()
+        try {
+            openSecureItemsPrefs().edit().putString(args.key, args.value).apply()
+            ret.put("success", true)
+        } catch (e: Exception) {
+            Log.e("NativeBridgePlugin", "set_secure_item failed", e)
+            ret.put("success", false)
+            ret.put("error", e.message ?: "unknown")
+        }
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun get_secure_item(invoke: Invoke) {
+        val args = invoke.parseArgs(SecureItemGetArgs::class.java)
+        val ret = JSObject()
+        try {
+            val value = openSecureItemsPrefs().getString(args.key, null)
+            if (value != null) ret.put("value", value)
+        } catch (e: Exception) {
+            Log.e("NativeBridgePlugin", "get_secure_item failed", e)
+            ret.put("error", e.message ?: "unknown")
+        }
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun clear_secure_item(invoke: Invoke) {
+        val args = invoke.parseArgs(SecureItemGetArgs::class.java)
+        val ret = JSObject()
+        try {
+            openSecureItemsPrefs().edit().remove(args.key).apply()
+            ret.put("success", true)
+        } catch (e: Exception) {
+            Log.e("NativeBridgePlugin", "clear_secure_item failed", e)
+            ret.put("success", false)
             ret.put("error", e.message ?: "unknown")
         }
         invoke.resolve(ret)
@@ -1353,9 +1509,115 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         }
         controller.show()
     }
+
+    /**
+     * Trigger a deep e-ink full screen refresh (GC16 waveform) to clear
+     * ghosting. Driven by the page-turner "Refresh Page" action on e-ink
+     * Android devices. Runs on the UI thread against the window's decor view;
+     * [EinkRefreshController] probes each vendor mechanism and resolves
+     * `success: false` (not an error) when none is available.
+     */
+    @Command
+    fun refresh_eink_screen(invoke: Invoke) {
+        activity.runOnUiThread {
+            val ret = JSObject()
+            try {
+                val view = activity.window?.decorView
+                val ok = view != null && EinkRefreshController.refresh(view)
+                ret.put("success", ok)
+            } catch (e: Exception) {
+                Log.e("NativeBridgePlugin", "refresh_eink_screen failed", e)
+                ret.put("success", false)
+                ret.put("error", e.message ?: "unknown")
+            }
+            invoke.resolve(ret)
+        }
+    }
+
+    /**
+     * Snapshot a region of the webview for the mesh page-curl texture
+     * (readest#555). The rect arrives in CSS pixels of the JS viewport;
+     * scaling by the display density (devicePixelRatio) maps it to window
+     * pixels. PixelCopy reads back from the window surface, which includes
+     * the hardware-accelerated WebView that View.draw would miss. Resolved
+     * as base64 because the plugin boundary is JSON-only; the Rust side
+     * decodes back to bytes.
+     *
+     * The result is JPEG, not PNG: a full-screen 3x PNG took ~1.5s to
+     * encode per page turn on a Xiaomi 13, which read as the curl not
+     * working at all. The page is opaque so JPEG loses nothing visible,
+     * and the destination bitmap is capped at 2x CSS pixels — PixelCopy
+     * scales into a smaller bitmap for free and the moving page stays
+     * visually sharp.
+     */
+    @Command
+    fun capture_webview_region(invoke: Invoke) {
+        val args = invoke.parseArgs(CaptureWebviewRegionArgs::class.java)
+        val webView = webViewRef
+        val window = activity.window
+        if (webView == null || window == null) {
+            invoke.reject("WebView not available")
+            return
+        }
+        activity.runOnUiThread {
+            val density = webView.resources.displayMetrics.density
+            val location = IntArray(2)
+            webView.getLocationInWindow(location)
+            val left = location[0] + (args.x * density).toInt()
+            val top = location[1] + (args.y * density).toInt()
+            val width = (args.width * density).toInt()
+            val height = (args.height * density).toInt()
+            if (width <= 0 || height <= 0) {
+                invoke.reject("Empty capture region")
+                return@runOnUiThread
+            }
+            val captureScale = minOf(density, 2f)
+            val destWidth = (args.width * captureScale).toInt()
+            val destHeight = (args.height * captureScale).toInt()
+            val bitmap = Bitmap.createBitmap(destWidth, destHeight, Bitmap.Config.ARGB_8888)
+            try {
+                PixelCopy.request(
+                    window,
+                    Rect(left, top, left + width, top + height),
+                    bitmap,
+                    { result ->
+                        if (result == PixelCopy.SUCCESS) {
+                            // Encode off the main thread; ~100ms of work for
+                            // a full-screen 2x JPEG.
+                            pluginScope.launch {
+                                val data = withContext(Dispatchers.IO) {
+                                    val out = ByteArrayOutputStream()
+                                    bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                                    Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+                                }
+                                invoke.resolve(JSObject().put("data", data))
+                            }
+                        } else {
+                            invoke.reject("PixelCopy failed: $result")
+                        }
+                    },
+                    Handler(Looper.getMainLooper())
+                )
+            } catch (e: IllegalArgumentException) {
+                // Thrown when the rect falls outside the window bounds.
+                invoke.reject("Capture region out of bounds: ${e.message}")
+            }
+        }
+    }
 }
 
 @app.tauri.annotation.InvokeArg
 class SyncPassphraseSetArgs {
     lateinit var passphrase: String
+}
+
+@app.tauri.annotation.InvokeArg
+class SecureItemSetArgs {
+    lateinit var key: String
+    lateinit var value: String
+}
+
+@app.tauri.annotation.InvokeArg
+class SecureItemGetArgs {
+    lateinit var key: String
 }

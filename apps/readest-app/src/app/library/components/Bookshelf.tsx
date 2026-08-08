@@ -43,7 +43,9 @@ import {
   compareSortValues,
   resolveEffectivePrimarySort,
   resolveEffectiveSecondarySort,
+  selectRecentShelfBooks,
   withReadingStatus,
+  withTimeRemainingLast,
 } from '../utils/libraryUtils';
 import { eventDispatcher } from '@/utils/event';
 import { getLocalBookFilename } from '@/utils/book';
@@ -60,6 +62,8 @@ import ShareBookDialog from './ShareBookDialog';
 import { useAuth } from '@/context/AuthContext';
 import GroupingModal from './GroupingModal';
 import SetStatusAlert from './SetStatusAlert';
+import RecentShelf, { RECENT_SHELF_BOOK_COUNT } from './RecentShelf';
+import { useOpenBook } from '../hooks/useOpenBook';
 
 interface BookshelfProps {
   libraryBooks: Book[];
@@ -90,7 +94,26 @@ interface BookshelfProps {
 type BookshelfListContext = {
   autoColumns: boolean;
   fixedColumns: number;
+  /**
+   * The recently-read shelf, rendered in the Virtuoso header so it scrolls with
+   * the shelf content (not sticky). `null` when hidden. Passed through context
+   * (rather than recreating the Header component) so Virtuoso keeps the Header
+   * identity stable and does not reset its scroller on every Bookshelf render.
+   */
+  recentShelfHeader: React.ReactNode;
+  /**
+   * Height (px) of the trailing Footer spacer. Defaults to the baseline
+   * breathing room, but grows to clear the fixed select-mode action bar so the
+   * last book can scroll above it instead of hiding behind it (#5175).
+   */
+  footerHeight: number;
 };
+
+const DEFAULT_FOOTER_HEIGHT = 34;
+
+const BookshelfFooter = ({ context }: { context?: BookshelfListContext }) => (
+  <div style={{ height: context?.footerHeight ?? DEFAULT_FOOTER_HEIGHT }} />
+);
 
 const BOOKSHELF_GRID_CLASSES =
   'bookshelf-items transform-wrapper grid gap-x-4 px-4 sm:gap-x-0 sm:px-2 ' +
@@ -119,22 +142,29 @@ const BookshelfGridList: GridComponents<BookshelfListContext>['List'] = React.fo
 ));
 BookshelfGridList.displayName = 'BookshelfGridList';
 
-const BookshelfLinearList: Components['List'] = React.forwardRef<HTMLDivElement, ListProps>(
-  ({ children, style, 'data-testid': testId }, ref) => (
-    <div ref={ref} data-testid={testId} className={BOOKSHELF_LIST_CLASSES} style={style}>
-      {children}
-    </div>
-  ),
-);
+const BookshelfLinearList: Components<unknown, BookshelfListContext>['List'] = React.forwardRef<
+  HTMLDivElement,
+  ListProps
+>(({ children, style, 'data-testid': testId }, ref) => (
+  <div ref={ref} data-testid={testId} className={BOOKSHELF_LIST_CLASSES} style={style}>
+    {children}
+  </div>
+));
 BookshelfLinearList.displayName = 'BookshelfLinearList';
+
+const BookshelfHeader = ({ context }: { context?: BookshelfListContext }) => (
+  <>{context?.recentShelfHeader ?? null}</>
+);
 
 const GRID_VIRTUOSO_COMPONENTS: GridComponents<BookshelfListContext> = {
   List: BookshelfGridList,
-  Footer: () => <div style={{ height: 34 }} />,
+  Header: BookshelfHeader,
+  Footer: BookshelfFooter,
 };
-const LIST_VIRTUOSO_COMPONENTS: Components = {
+const LIST_VIRTUOSO_COMPONENTS: Components<unknown, BookshelfListContext> = {
   List: BookshelfLinearList,
-  Footer: () => <div style={{ height: 34 }} />,
+  Header: BookshelfHeader,
+  Footer: BookshelfFooter,
 };
 
 const Bookshelf: React.FC<BookshelfProps> = ({
@@ -174,10 +204,13 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     settings.librarySortBy2 ?? 'none',
   );
   const sortBy2 = resolveEffectiveSecondarySort(sortBy2Raw, groupBy);
+  const showTimeRemaining =
+    sortBy === LibrarySortByType.TimeRemaining || sortBy2 === LibrarySortByType.TimeRemaining;
   const coverFit = searchParams?.get('cover') || settings.libraryCoverFit;
 
   const [loading, setLoading] = useState(false);
   const [showSelectModeActions, setShowSelectModeActions] = useState(false);
+  const [selectModeActionsHeight, setSelectModeActionsHeight] = useState(0);
   const [bookIdsToDelete, setBookIdsToDelete] = useState<string[]>([]);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showStatusAlert, setShowStatusAlert] = useState(false);
@@ -276,12 +309,9 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     // Sort books within each group
     // For series groups, series index is always ascending; sort direction applies to fallback only
     const sortAscending = sortOrder === 'asc';
-    const withinGroupSorter = createWithinGroupSorter(
-      groupBy,
+    const withinGroupSorter = withTimeRemainingLast<Book>(
       sortBy,
-      uiLanguage,
-      sortAscending,
-      sortBy2,
+      createWithinGroupSorter(groupBy, sortBy, uiLanguage, sortAscending, sortBy2),
     );
     groups.forEach((group) => {
       group.books.sort(withinGroupSorter);
@@ -296,39 +326,43 @@ const Bookshelf: React.FC<BookshelfProps> = ({
       // to avoid the merge sort below overriding the within-group sort order
       return ungroupedBooks;
     } else {
-      ungroupedBooks.sort((a, b) => bookSorter(a, b) * sortOrderMultiplier);
+      ungroupedBooks.sort(
+        withTimeRemainingLast<Book>(sortBy, (a, b) => bookSorter(a, b) * sortOrderMultiplier),
+      );
     }
 
     // Merge groups and ungrouped books, then sort them together
     const allItems: (Book | BooksGroup)[] = [...groups, ...ungroupedBooks];
     const groupSorter = createGroupSorter(sortBy, uiLanguage, groupBy);
 
-    allItems.sort((a, b) => {
-      const isAGroup = 'books' in a;
-      const isBGroup = 'books' in b;
+    allItems.sort(
+      withTimeRemainingLast<Book | BooksGroup>(sortBy, (a, b) => {
+        const isAGroup = 'books' in a;
+        const isBGroup = 'books' in b;
 
-      // If both are groups, use group sorter
-      if (isAGroup && isBGroup) {
-        return groupSorter(a, b) * sortOrderMultiplier;
-      }
+        // If both are groups, use group sorter
+        if (isAGroup && isBGroup) {
+          return groupSorter(a, b) * sortOrderMultiplier;
+        }
 
-      // If both are books, use book sorter
-      if (!isAGroup && !isBGroup) {
-        return bookSorter(a, b) * sortOrderMultiplier;
-      }
+        // If both are books, use book sorter
+        if (!isAGroup && !isBGroup) {
+          return bookSorter(a, b) * sortOrderMultiplier;
+        }
 
-      // For series/author groups: compare sort values to interleave properly
-      if (isAGroup && !isBGroup) {
-        const groupValue = getGroupSortValue(a, sortBy, groupBy);
-        const bookValue = getBookSortValue(b, sortBy);
-        return compareSortValues(groupValue, bookValue, uiLanguage) * sortOrderMultiplier;
-      } else if (!isAGroup && isBGroup) {
-        const bookValue = getBookSortValue(a, sortBy);
-        const groupValue = getGroupSortValue(b, sortBy, groupBy);
-        return compareSortValues(bookValue, groupValue, uiLanguage) * sortOrderMultiplier;
-      }
-      return 0;
-    });
+        // For series/author groups: compare sort values to interleave properly
+        if (isAGroup && !isBGroup) {
+          const groupValue = getGroupSortValue(a, sortBy, groupBy);
+          const bookValue = getBookSortValue(b, sortBy);
+          return compareSortValues(groupValue, bookValue, uiLanguage) * sortOrderMultiplier;
+        } else if (!isAGroup && isBGroup) {
+          const bookValue = getBookSortValue(a, sortBy);
+          const groupValue = getGroupSortValue(b, sortBy, groupBy);
+          return compareSortValues(bookValue, groupValue, uiLanguage) * sortOrderMultiplier;
+        }
+        return 0;
+      }),
+    );
 
     return allItems;
   }, [sortOrder, sortBy, sortBy2, groupBy, groupId, uiLanguage, currentBookshelfItems]);
@@ -668,12 +702,82 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   // last book; list mode doesn't have an import tile.
   const gridTotalCount = hasItems ? sortedBookshelfItems.length + 1 : 0;
 
+  // Recently-read shelf: shares the availability-aware open path with per-item
+  // taps so cloud-only synced books download before opening. `openBook` is
+  // memoized inside the hook, keeping `openRecentBook` -> `recentShelfHeader`
+  // -> `listContext` identities stable (no full-grid re-render churn).
+  const { openBook } = useOpenBook({ setLoading, handleBookDownload });
+  const openRecentBook = useCallback((book: Book) => openBook(book), [openBook]);
+
+  // Flat recency slice of the whole library, independent of the main shelf's
+  // sort/grouping. Built from `libraryBooks` (not the sorted/filtered items).
+  const recentBooks = useMemo(
+    () => selectRecentShelfBooks(libraryBooks, RECENT_SHELF_BOOK_COUNT),
+    [libraryBooks],
+  );
+
+  // A top-level quick-resume strip: hidden while searching, inside a group,
+  // selecting, or when nothing has been read yet.
+  const showRecentShelf =
+    settings.libraryRecentShelfEnabled &&
+    !queryTerm &&
+    !groupId &&
+    !isSelectMode &&
+    recentBooks.length > 0;
+
+  const recentShelfHeader = useMemo(
+    () =>
+      showRecentShelf ? (
+        <RecentShelf
+          books={recentBooks}
+          coverFit={coverFit as LibraryCoverFitType}
+          autoColumns={settings.libraryAutoColumns}
+          fixedColumns={settings.libraryColumns}
+          onOpenBook={openRecentBook}
+          handleBookUpload={handleBookUpload}
+          handleBookDownload={handleBookDownload}
+          showBookDetailsModal={handleShowDetailsBook}
+          showTimeRemaining={showTimeRemaining}
+        />
+      ) : null,
+    [
+      showRecentShelf,
+      recentBooks,
+      coverFit,
+      settings.libraryAutoColumns,
+      settings.libraryColumns,
+      openRecentBook,
+      handleBookUpload,
+      handleBookDownload,
+      handleShowDetailsBook,
+      showTimeRemaining,
+    ],
+  );
+
+  // Reserve enough trailing space for the fixed select-mode action bar so the
+  // last book scrolls clear of it (#5175). `selectModeActionsHeight` already
+  // includes the bar's safe-area padding and is 0 whenever the bar is hidden,
+  // so the baseline breathing room applies at all other times.
+  const footerHeight =
+    selectModeActionsHeight > 0
+      ? selectModeActionsHeight + DEFAULT_FOOTER_HEIGHT
+      : DEFAULT_FOOTER_HEIGHT;
+
   const listContext = useMemo<BookshelfListContext>(
     () => ({
       autoColumns: settings.libraryAutoColumns,
       fixedColumns: settings.libraryColumns,
+      recentShelfHeader,
+      showTimeRemaining,
+      footerHeight,
     }),
-    [settings.libraryAutoColumns, settings.libraryColumns],
+    [
+      settings.libraryAutoColumns,
+      settings.libraryColumns,
+      recentShelfHeader,
+      showTimeRemaining,
+      footerHeight,
+    ],
   );
 
   const renderBookshelfItem = useCallback(
@@ -728,6 +832,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
           transferProgress={
             'hash' in item ? booksTransferProgress[(item as Book).hash] || null : null
           }
+          showTimeRemaining={showTimeRemaining}
         />
       );
     },
@@ -750,6 +855,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
       handleShowDetailsBook,
       handleLibraryNavigation,
       handleUpdateReadingStatus,
+      showTimeRemaining,
     ],
   );
 
@@ -786,10 +892,11 @@ const Bookshelf: React.FC<BookshelfProps> = ({
           />
         )}
         {hasItems && !isGridMode && (
-          <Virtuoso
+          <Virtuoso<unknown, BookshelfListContext>
             overscan={200}
             totalCount={sortedBookshelfItems.length}
             components={LIST_VIRTUOSO_COMPONENTS}
+            context={listContext}
             computeItemKey={computeItemKey}
             itemContent={renderBookshelfItem}
             scrollerRef={handleScrollerRef}
@@ -805,6 +912,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
         <SelectModeActions
           selectedBooks={selectedBooks}
           safeAreaBottom={safeAreaInsets?.bottom || 0}
+          onHeightChange={setSelectModeActionsHeight}
           // Native send targets: iOS, Android, macOS — route through
           // tauri-plugin-sharekit (UIActivityViewController /
           // Intent.ACTION_SEND / NSSharingServicePicker). Linux has no

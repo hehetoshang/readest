@@ -18,6 +18,8 @@ export const LibrarySortByType = {
   Size: 'size',
   Format: 'format',
   Published: 'published',
+  Progress: 'progress',
+  TimeRemaining: 'timeRemaining',
 } as const;
 
 export type LibrarySortByType = (typeof LibrarySortByType)[keyof typeof LibrarySortByType];
@@ -142,6 +144,110 @@ export interface WebDAVSettings {
   // Wall-clock millisecond timestamp of the last successful end-to-end
   // sync, surfaced in the WebDAV settings sub-page.
   lastSyncedAt?: number;
+  // Device-local wall-clock millis of when this provider was made the
+  // selected cloud sync backend on THIS device. Anchors the mixed-fleet
+  // detection probe: any native /api/sync row newer than this means
+  // another device is still writing the gated channels.
+  providerSelectedAt?: number;
+}
+
+/**
+ * Google Drive file-sync settings. A second file-sync backend alongside
+ * {@link WebDAVSettings}, sharing the same engine, sub-toggles, and strategy
+ * vocabulary. Drive has no URL / credentials / root path (it is OAuth + a
+ * fixed `/Readest` namespace under the `drive.file` scope), and no BYO client.
+ * The OAuth token is NOT stored here — it lives in the OS keychain. `deviceId`
+ * and `lastSyncedAt` are device-local (excluded from cross-device restore).
+ */
+export interface GoogleDriveSettings {
+  enabled: boolean;
+  /** Connected account's email (or display name), shown in the settings UI. */
+  accountLabel?: string;
+  syncProgress?: boolean;
+  syncNotes?: boolean;
+  syncBooks?: boolean;
+  fullSync?: boolean;
+  strategy?: KOSyncStrategy;
+  deviceId?: string;
+  lastSyncedAt?: number;
+  /** See {@link WebDAVSettings.providerSelectedAt}. */
+  providerSelectedAt?: number;
+}
+
+/**
+ * S3-compatible object-store file-sync settings — the third file-sync
+ * backend alongside {@link WebDAVSettings} and {@link GoogleDriveSettings},
+ * sharing the same engine, sub-toggles, and strategy vocabulary. Covers any
+ * SigV4 endpoint: Cloudflare R2, AWS S3, MinIO, Backblaze B2. Addressing is
+ * path-style (`<endpoint>/<bucket>/<key>`). Credentials live here like
+ * WebDAV's (same encrypted cross-device credential-sync semantics).
+ */
+export interface S3Settings {
+  enabled: boolean;
+  /** Service endpoint origin, e.g. `https://<account-id>.r2.cloudflarestorage.com`. */
+  endpoint: string;
+  /** SigV4 region; 'auto' works for R2/MinIO, AWS wants the bucket region. */
+  region?: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  syncProgress?: boolean;
+  syncNotes?: boolean;
+  syncBooks?: boolean;
+  fullSync?: boolean;
+  strategy?: KOSyncStrategy;
+  deviceId?: string;
+  lastSyncedAt?: number;
+  /** See {@link WebDAVSettings.providerSelectedAt}. */
+  providerSelectedAt?: number;
+}
+
+/**
+ * Microsoft OneDrive file-sync settings. An OAuth-based file-sync backend
+ * alongside {@link GoogleDriveSettings}, storing data in the Graph App Folder
+ * (approot). No URL / credentials / root path and no BYO client; the OAuth
+ * token lives in the OS keychain (native) or sessionStorage (web), never here.
+ * `deviceId`/`lastSyncedAt`/`providerSelectedAt` are device-local.
+ */
+export interface OneDriveSettings {
+  enabled: boolean;
+  /** Connected account's userPrincipalName/email, shown in the settings UI. */
+  accountLabel?: string;
+  syncProgress?: boolean;
+  syncNotes?: boolean;
+  syncBooks?: boolean;
+  fullSync?: boolean;
+  strategy?: KOSyncStrategy;
+  deviceId?: string;
+  lastSyncedAt?: number;
+  /** See {@link WebDAVSettings.providerSelectedAt}. */
+  providerSelectedAt?: number;
+}
+
+/**
+ * Readest Cloud's own library-sync switch. Readest Cloud used to be the
+ * derived fallback — "on" whenever no third-party provider was enabled —
+ * because exactly one provider could own the library channels. Providers are
+ * now independently selectable (#5062), so Readest Cloud needs a flag of its
+ * own.
+ *
+ * `enabled` is DELIBERATELY optional with no default (this slice must never
+ * enter `DEFAULT_SYSTEM_SETTINGS`): an absent value falls back to the old
+ * derivation, so upgrading users keep exactly the behaviour they had and no
+ * migration has to rewrite anyone's settings. It is written only once the user
+ * touches a Cloud Sync checkbox.
+ *
+ * Device-local, like the other providers' `enabled` flags.
+ */
+export interface ReadestCloudSettings {
+  enabled?: boolean;
+  /**
+   * Device-local wall-clock millis of when this device turned Readest Cloud
+   * off. Anchors the mixed-fleet probe: a native /api/sync row newer than this
+   * means another device is still writing the channels this one stopped
+   * writing. Excluded from cross-device restore.
+   */
+  disabledAt?: number;
 }
 
 /**
@@ -194,6 +300,8 @@ export interface HardwarePageTurnerSettings {
     pageNext: KeyBinding | null;
     sectionPrev: KeyBinding | null;
     sectionNext: KeyBinding | null;
+    /** E-ink full screen refresh (clears ghosting). Optional: absent on settings persisted before the feature existed. */
+    refresh?: KeyBinding | null;
   };
 }
 
@@ -212,6 +320,17 @@ export interface SystemSettings {
    * settings backups via `BACKUP_SETTINGS_BLACKLIST`.
    */
   externalLibraryFolders?: string[];
+  /**
+   * Absolute paths of the external library folders the user has opted into
+   * auto-import for. On library open and whenever the app regains focus,
+   * Readest re-scans each of these and imports any newly-added book files.
+   * A subset of {@link externalLibraryFolders} (auto-import requires the
+   * folder to be read in place). Set per-folder from the Import-from-Folder
+   * dialog. Desktop + Android only. Device-local (paths are meaningful only
+   * on this filesystem) and excluded from cloud settings backups via
+   * `BACKUP_SETTINGS_BLACKLIST`.
+   */
+  autoImportFolders?: string[];
 
   // keepLogin removed: auth has been disabled.
   // TODO: Re-add when talebook server authentication is connected.
@@ -226,7 +345,6 @@ export interface SystemSettings {
   swipeBrightnessGesture: boolean;
   hardwarePageTurner: HardwarePageTurnerSettings;
   alwaysShowStatusBar: boolean;
-  alwaysInForeground: boolean;
   openLastBooks: boolean;
   lastOpenBooks: string[];
   autoImportBooksOnOpen: boolean;
@@ -250,6 +368,8 @@ export interface SystemSettings {
   libraryCoverFit: LibraryCoverFitType;
   libraryAutoColumns: boolean;
   libraryColumns: number;
+  /** Show the recently-read carousel at the top of the library (issue #3797). */
+  libraryRecentShelfEnabled: boolean;
   /**
    * Library page background texture, configured independently from the reader
    * background (issue #4743). When any of these is undefined the library
@@ -296,7 +416,12 @@ export interface SystemSettings {
   kosync: KOSyncSettings;
   readwise: ReadwiseSettings;
   hardcover: HardcoverSettings;
+  /** Optional by design — see {@link ReadestCloudSettings}. Never defaulted. */
+  readestCloud?: ReadestCloudSettings;
   webdav: WebDAVSettings;
+  googleDrive: GoogleDriveSettings;
+  s3: S3Settings;
+  onedrive: OneDriveSettings;
 
   aiSettings: AISettings;
   /**

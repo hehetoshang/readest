@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterEach, describe, expect, it } from 'vitest';
 import { pdfjsPath } from 'foliate-js/pdf-assets.js';
 

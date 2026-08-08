@@ -7,7 +7,6 @@ import { PiSun, PiMoon } from 'react-icons/pi';
 import { TbSunMoon } from 'react-icons/tb';
 // import { MdCloudSync, MdSync, MdSyncProblem } from 'react-icons/md';
 
-import { invoke, PermissionState } from '@tauri-apps/api/core';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
 import { setBackupDialogVisible } from '@/app/library/components/BackupWindow';
@@ -45,11 +44,6 @@ interface SettingsMenuProps {
   setIsDropdownOpen?: (isOpen: boolean) => void;
 }
 
-interface Permissions {
-  postNotification: PermissionState;
-  manageStorage: PermissionState;
-}
-
 const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdownOpen }) => {
   const _ = useTranslation();
   // const router = useRouter();
@@ -65,7 +59,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
   const [isAutoImportBooksOnOpen, setIsAutoImportBooksOnOpen] = useState(
     settings.autoImportBooksOnOpen,
   );
-  const [alwaysInForeground, setAlwaysInForeground] = useState(settings.alwaysInForeground);
   const [savedBookCoverForLockScreen, setSavedBookCoverForLockScreen] = useState(
     settings.savedBookCoverForLockScreen || '',
   );
@@ -355,27 +348,34 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
               onClick={openTransferQueue}
             />
             <MenuItem
-              label={
-                lastSyncTime
-                  ? _('Synced {{time}}', {
-                      time: dayjs(lastSyncTime).fromNow(),
-                    })
-                  : _('Never synced')
-              }
+              label={syncRowLabel}
               Icon={user ? MdSync : MdSyncProblem}
               labelClass='ps-2 pe-1 !mx-0'
-              iconClassName={user && isSyncing ? 'animate-reverse-spin' : ''}
+              iconClassName={(user && isSyncing) || providerSyncing ? 'animate-reverse-spin' : ''}
               onClick={handleSyncLibrary}
+              description={
+                backends.length === 0
+                  ? undefined
+                  : providers.length > 1
+                    ? // Several providers named in full would overrun the row; show a
+                      // count. `count` (not a plain var) so i18next applies each
+                      // locale's plural rule — the common case is exactly 2, where
+                      // Slavic/Arabic paucal forms differ from the generic plural.
+                      _('Library sync via {{count}} providers', { count: providers.length })
+                    : _('Library sync via {{provider}}', { provider: providerNames })
+              }
             />
-            <button
-              onClick={handleUserProfile}
-              className='hover:bg-base-300 w-full rounded-md'
-              style={{
-                paddingInlineStart: `${iconSize}px`,
-              }}
-            >
-              <Quota quotas={quotas} labelClassName='h-10 pl-3 pr-2' />
-            </button>
+            {readestEnabled ? (
+              <button
+                onClick={handleUserProfile}
+                className='hover:bg-base-300 w-full rounded-md'
+                style={{
+                  paddingInlineStart: `${iconSize}px`,
+                }}
+              >
+                <Quota quotas={quotas} labelClassName='h-10 pl-3 pr-2' />
+              </button>
+            ) : null}
             <MenuItem label={_('Account')} onClick={handleUserProfile} />
           </ul>
         </MenuItem>
@@ -421,13 +421,6 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
           label={_('Always Show Status Bar')}
           toggled={isAlwaysShowStatusBar}
           onClick={toggleAlwaysShowStatusBar}
-        />
-      )}
-      {appService?.isAndroidApp && (
-        <MenuItem
-          label={_(_('Background Read Aloud'))}
-          toggled={alwaysInForeground}
-          onClick={toggleAlwaysInForeground}
         />
       )}
       <MenuItem

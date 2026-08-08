@@ -87,23 +87,60 @@ export const mergeBookConfig = (
  * Overlay the user-facing metadata of `remote` onto `local`, preserving every
  * device-local / file-system field: `filePath`, `sourceTitle` (which names the
  * on-disk file), `coverImageUrl` (a device-local blob URL the caller
- * regenerates), reading progress, reading status, group membership, `hash`,
- * `format`, `createdAt`, etc.
+ * regenerates), `hash`, `format`, `createdAt`, etc.
  *
- * Only the fields a metadata edit actually changes travel — this list mirrors
- * `getBookWithUpdatedMetadata` in `utils/book.ts`, which is the local side of
- * the same operation. The cover image is replicated separately as cover.png
- * bytes (see the reconciliation pass in the engine), so it is intentionally
- * absent here.
+ * Two independent merge clocks, mirroring the native cloud sync:
+ *   - The metadata field subset applies only when `remote.updatedAt` is
+ *     strictly newer (whole-subset LWW). Group membership (`groupId` /
+ *     `groupName`) and `tags` travel with it — without them a re-group or
+ *     re-tag of an already-synced book bumps `updatedAt`, wins LWW, yet the
+ *     change is dropped by the overlay and never propagates (#4942).
+ *     Assigning the raw remote values (not `?? local`) lets removals
+ *     (undefined) clear on peers too.
+ *   - `readingStatus` merges on its own `readingStatusUpdatedAt` clock
+ *     (field-level LWW, the client-side mirror of the native server merge,
+ *     #4634). This survives the asymmetric race where this device edited
+ *     metadata AFTER a peer changed the status: whole-book LWW alone would
+ *     silently drop the status change.
+ *
+ * `progress` rides the row's `updatedAt` clock like the rest of the subset, so
+ * a peer's reading position reaches the shelf without opening the book (#5067).
+ * The bookshelf renders `book.progress`, and only `saveConfig` ever wrote it —
+ * so before this the percentage stayed stale until the user opened the book,
+ * even though the row itself re-sorted to the front on the remote `updatedAt`.
+ * This is the same field the native cloud sync carries on its `books` row.
+ * Unlike tags / groups it falls back to the local value when the remote row has
+ * none: absent progress means "that peer never opened the book", not "the user
+ * cleared it" (there is no clear-progress gesture), and a raw assignment would
+ * let a rename on an unread peer wipe a real percentage.
+ *
+ * The metadata subset mirrors `getBookWithUpdatedMetadata` in `utils/book.ts`,
+ * the local side of the same operation. The cover image is replicated
+ * separately as cover.png bytes (see the reconciliation pass in the engine),
+ * so it is intentionally absent here.
  */
-export const mergeBookMetadata = (local: Book, remote: Book): Book => ({
-  ...local,
-  title: remote.title,
-  author: remote.author,
-  metadata: remote.metadata ?? local.metadata,
-  primaryLanguage: remote.primaryLanguage ?? local.primaryLanguage,
-  updatedAt: remote.updatedAt,
-});
+export const mergeBookMetadata = (local: Book, remote: Book): Book => {
+  const remoteMetaNewer = (remote.updatedAt ?? 0) > (local.updatedAt ?? 0);
+  const merged: Book = remoteMetaNewer
+    ? {
+        ...local,
+        title: remote.title,
+        author: remote.author,
+        metadata: remote.metadata ?? local.metadata,
+        primaryLanguage: remote.primaryLanguage ?? local.primaryLanguage,
+        groupId: remote.groupId,
+        groupName: remote.groupName,
+        tags: remote.tags,
+        progress: remote.progress ?? local.progress,
+        updatedAt: remote.updatedAt,
+      }
+    : { ...local };
+  if ((remote.readingStatusUpdatedAt ?? 0) > (local.readingStatusUpdatedAt ?? 0)) {
+    merged.readingStatus = remote.readingStatus;
+    merged.readingStatusUpdatedAt = remote.readingStatusUpdatedAt;
+  }
+  return merged;
+};
 
 /**
  * LWW predicate for the library-index metadata reconciliation: true when the
@@ -113,3 +150,16 @@ export const mergeBookMetadata = (local: Book, remote: Book): Book => ({
  */
 export const isRemoteBookMetadataNewer = (local: Book, remote: Book): boolean =>
   !remote.deletedAt && !local.deletedAt && (remote.updatedAt ?? 0) > (local.updatedAt ?? 0);
+
+/**
+ * Reconciliation trigger: apply `mergeBookMetadata` when the remote copy is
+ * newer on EITHER clock — book metadata (`updatedAt`) or reading status
+ * (`readingStatusUpdatedAt`). Checking only `updatedAt` would skip the
+ * status-only-newer case entirely, so a peer's Finished mark could never
+ * reach a device that edited the book's metadata afterwards.
+ */
+export const shouldApplyRemoteBookMetadata = (local: Book, remote: Book): boolean =>
+  !remote.deletedAt &&
+  !local.deletedAt &&
+  ((remote.updatedAt ?? 0) > (local.updatedAt ?? 0) ||
+    (remote.readingStatusUpdatedAt ?? 0) > (local.readingStatusUpdatedAt ?? 0));

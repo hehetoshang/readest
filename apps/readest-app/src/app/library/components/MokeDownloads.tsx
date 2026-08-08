@@ -67,13 +67,11 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
     )
       .then((results) => {
         if (cancelled) return;
-        setBookMetadata(
-          Object.fromEntries(
-            results.filter(
-              (result): result is readonly [string, ParsedMokeBookMetadata] => !!result[1],
-            ),
-          ),
-        );
+        const metadata: Record<string, ParsedMokeBookMetadata> = {};
+        for (const [id, meta] of results) {
+          if (meta) metadata[id] = meta;
+        }
+        setBookMetadata(metadata);
       })
       .catch((error) => console.warn('Failed to read Moke book metadata:', error));
 
