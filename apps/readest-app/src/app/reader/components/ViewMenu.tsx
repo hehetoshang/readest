@@ -241,6 +241,8 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
       }}
       onCancel={() => setIsDropdownOpen?.(false)}
     >
+      <MenuItem label={_('Settings')} onClick={openFontLayoutMenu} />
+
       {bookData.bookDoc?.rendition?.layout === 'pre-paginated' && (
         <>
           <div

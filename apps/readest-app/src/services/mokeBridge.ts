@@ -105,6 +105,95 @@ function withMokeContext(data: Record<string, unknown>): Record<string, unknown>
 }
 
 // ---------------------------------------------------------------------------
+// Moke 服务器进度直存（单 WebView 运行时专用）
+// ---------------------------------------------------------------------------
+//
+// 在 Android / iOS / OHOS 上，宿主 Moke 应用只有唯一一个 WebView。打开阅读器时
+// Moke 会整页导航到 `/readest/reader`，把 Moke 应用（含 ReaderProgressProvider）
+// 卸载掉——桌面端由主窗口消费的 `reader:page:changed` 事件在移动端没有监听者。
+// 因此宿主会把 serverUrl 通过 `mokeServerUrl` 查询参数透传进来，由阅读器在嵌入
+// 模式下直接把进度保存到 Moke 服务器（与桌面端 ReaderProgressProvider 的保存
+// 逻辑保持一致，POST 到 `/api/book/{id}/progress`）。
+//
+// 桌面端阅读器窗口拿不到 `mokeServerUrl`（宿主不传），所以这里不会与桌面端
+// 主窗口的 ReaderProgressProvider 重复保存。
+
+const PROGRESS_SAVE_DEBOUNCE_MS = 1200;
+
+let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingProgress: Record<string, unknown> | null = null;
+
+function progressStringValue(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  return undefined;
+}
+
+function progressNumberValue(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return value;
+}
+
+async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<void> {
+  const serverUrl = (window as any).__MOKE_SERVER_URL;
+  const mokeBookId = (window as any).__MOKE_BOOK_ID;
+  if (typeof serverUrl !== 'string' || !serverUrl || !mokeBookId) return;
+
+  const payload = {
+    schema: 'moke.readest.progress.v1',
+    reader: 'readest',
+    moke_book_id: String(mokeBookId),
+    reader_book_id: progressStringValue(data['book_id']),
+    view_key: progressStringValue(data['view_key']),
+    location: progressStringValue(data['location']),
+    section_href: progressStringValue(data['section_href']),
+    chapter: progressStringValue(data['chapter']),
+    page: progressNumberValue(data['page']),
+    total_pages: progressNumberValue(data['total_pages']),
+    progress: progressNumberValue(data['progress']),
+    fraction: progressNumberValue(data['fraction']),
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+    await tauriFetch(`${serverUrl}/api/book/${String(mokeBookId)}/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ progress: payload }),
+      credentials: 'include',
+      maxRedirections: 5,
+      danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
+    } as unknown as RequestInit);
+  } catch (error) {
+    // 尽力而为：保存失败不打断阅读，下一次翻页或关闭书籍时会重试。
+    console.warn('[mokeBridge] 保存阅读进度到 Moke 服务器失败:', error);
+  }
+}
+
+function scheduleProgressSave(data: Record<string, unknown>): void {
+  pendingProgress = data;
+  if (progressSaveTimer) clearTimeout(progressSaveTimer);
+  progressSaveTimer = setTimeout(() => {
+    progressSaveTimer = null;
+    const latest = pendingProgress;
+    pendingProgress = null;
+    if (latest) void saveProgressToMokeServer(latest);
+  }, PROGRESS_SAVE_DEBOUNCE_MS);
+}
+
+function flushProgressSave(): Promise<void> {
+  if (progressSaveTimer) {
+    clearTimeout(progressSaveTimer);
+    progressSaveTimer = null;
+  }
+  const latest = pendingProgress;
+  pendingProgress = null;
+  if (!latest) return Promise.resolve();
+  return saveProgressToMokeServer(latest);
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -119,6 +208,16 @@ const THROTTLED_EVENTS = new Set(['page:changed']);
  */
 export function emitReaderEvent(event: string, data: Record<string, unknown>): Promise<void> {
   if (!isEmbedded()) return Promise.resolve();
+
+  // 单 WebView 运行时宿主应用已被卸载，这里由阅读器直接保存进度。
+  if (event === 'page:changed' && typeof (window as any).__MOKE_SERVER_URL === 'string') {
+    scheduleProgressSave(data);
+  }
+
+  // 关闭书籍前先冲刷待保存的进度，确保最后一页不丢失。
+  if (event === 'book:closed') {
+    return flushProgressSave().then(() => _doEmit(event, data));
+  }
 
   if (THROTTLED_EVENTS.has(event)) {
     throttledEmit(event, data);

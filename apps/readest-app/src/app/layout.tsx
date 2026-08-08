@@ -142,6 +142,7 @@ const mokeLaunchContextScript = `(() => {
   window.__MOKE_EMBEDDED = true;
   window.__MOKE_EINK = params.get('mokeEink') === '1';
   window.__MOKE_BOOK_ID = params.get('mokeBookId') || null;
+  window.__MOKE_SERVER_URL = params.get('mokeServerUrl') || null;
   const progress = params.get('mokeRestoreProgress');
   if (!progress) return;
   try {

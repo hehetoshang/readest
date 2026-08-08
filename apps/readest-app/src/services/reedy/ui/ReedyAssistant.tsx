@@ -42,6 +42,7 @@ import { useReedyTurn } from './useReedyTurn';
 import { AgentThread } from './AgentThread';
 import { Composer } from './Composer';
 import { IndexingStatus, type IndexingPhase } from './IndexingStatus';
+import { describeAIError } from '@/services/ai/utils/describeError';
 
 export interface ReedyAssistantProps {
   appService: AppService;
@@ -267,6 +268,8 @@ export function ReedyAssistant({
     current: number;
     total: number;
   } | null>(null);
+  // Human-readable failure reason surfaced in the IndexingStatus failed view.
+  const [indexError, setIndexError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!reedy || !bookHash) return;
@@ -292,6 +295,7 @@ export function ReedyAssistant({
   const handleIndex = useCallback(async () => {
     if (!reedy) return;
     setIndexingPhase('indexing');
+    setIndexError(null);
     try {
       await reedy.indexer.indexBook(bookDoc, bookHash, models.embedding, {
         onProgress: (e) => {
@@ -315,6 +319,7 @@ export function ReedyAssistant({
     } catch (err) {
       console.error('[Reedy] index failed', err);
       setIndexingPhase('failed');
+      setIndexError(describeAIError(err, 'Indexing'));
     } finally {
       setIndexProgress(null);
     }
@@ -357,6 +362,7 @@ export function ReedyAssistant({
         chunkProgress={
           indexProgress ? { current: indexProgress.current, total: indexProgress.total } : undefined
         }
+        errorMessage={indexError ?? undefined}
         onIndex={handleIndex}
         onReindex={handleIndex}
       />

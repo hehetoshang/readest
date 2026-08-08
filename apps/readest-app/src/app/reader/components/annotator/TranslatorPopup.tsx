@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { streamText } from 'ai';
 import Popup from '@/components/Popup';
 import { Position } from '@/utils/sel';
 import { useAuth } from '@/context/AuthContext';
@@ -12,6 +13,8 @@ import {
   getTranslators,
   isTranslatorAvailable,
 } from '@/services/translators';
+import { getAIProvider } from '@/services/ai/providers';
+import { AI_PROVIDER_ID, isAIAskEnabled, parseAIAnswer } from '@/services/ai/aiAsk';
 import Select from '@/components/Select';
 
 const notSupportedLangs = [''];
@@ -55,12 +58,16 @@ const TranslatorPopup: React.FC<TranslatorPopupProps> = ({
   const [targetLang, setTargetLang] = useState(settings.globalReadSettings.translateTargetLang);
   const [provider, setProvider] = useState(settings.globalReadSettings.translationProvider);
   const [translation, setTranslation] = useState<string | null>(null);
+  const [aiThinking, setAiThinking] = useState('');
   const [detectedSourceLang, setDetectedSourceLang] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { translate, translators } = useTranslator({
-    provider,
+    // AI 翻译不经过第三方翻译 API，useTranslator 只用它的 providers 列表和
+    // 非 AI 分支；传 undefined 让 useTranslator 保持默认 provider，避免
+    // provider='ai' 时它内部 fallback 导致 translate 引用变化、重复触发请求。
+    provider: provider === AI_PROVIDER_ID ? undefined : provider,
     sourceLang,
     targetLang,
   } as UseTranslatorOptions);
@@ -77,6 +84,10 @@ const TranslatorPopup: React.FC<TranslatorPopupProps> = ({
 
   const handleProviderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const requestedProvider = event.target.value;
+    settings.globalReadSettings.translationProvider = requestedProvider;
+    setSettings(settings);
+    setProvider(requestedProvider);
+    if (requestedProvider === AI_PROVIDER_ID) return;
     const availableTranslators = getTranslators().filter((t) => isTranslatorAvailable(t, !!token));
     const selectedTranslator =
       availableTranslators.find((t) => t.name === requestedProvider) || availableTranslators[0]!;
@@ -93,18 +104,48 @@ const TranslatorPopup: React.FC<TranslatorPopupProps> = ({
       label: getTranslatorDisplayLabel(t, !!token, _),
       disabled: !!t.disabled,
     }));
-    setProviders(availableProviders);
+    const aiEnabled = isAIAskEnabled(settings.aiSettings);
+    setProviders([
+      ...availableProviders,
+      { name: AI_PROVIDER_ID, label: _('AI 翻译'), disabled: !aiEnabled },
+    ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [translators]);
+  }, [translators, settings.aiSettings]);
 
   useEffect(() => {
     setLoading(true);
     const fetchTranslation = async () => {
       setError(null);
       setTranslation(null);
+      setAiThinking('');
 
       try {
         const input = text.replaceAll('\n', '').trim();
+
+        // AI 翻译：走用户配置的 AI 服务，而不是第三方翻译 API。
+        if (provider === AI_PROVIDER_ID) {
+          const aiSettings = settings.aiSettings;
+          if (!isAIAskEnabled(aiSettings)) {
+            throw new Error('AI not configured');
+          }
+          const targetLangName = translatorLangs[targetLang] || targetLang || '中文';
+          const aiProvider = getAIProvider(aiSettings);
+          const result = streamText({
+            model: aiProvider.getModel(),
+            system: `请将以下文字翻译成${targetLangName}，只输出译文，不要附加任何说明、解释或引号：`,
+            messages: [{ role: 'user', content: input }],
+          });
+          let acc = '';
+          for await (const chunk of result.textStream) {
+            acc += chunk;
+            // 分离 <think>…</think> 思考过程，只把译文写入翻译区。
+            const { thinking, answer } = parseAIAnswer(acc);
+            setAiThinking(thinking.join('\n'));
+            setTranslation(answer);
+          }
+          return;
+        }
+
         const result = await translate([input]);
         const translatedText = result[0];
         const detectedSource = null;
@@ -187,6 +228,16 @@ const TranslatorPopup: React.FC<TranslatorPopupProps> = ({
               ]}
             />
           </div>
+          {aiThinking && (
+            <details className='mb-2 rounded-md bg-white/5 p-2'>
+              <summary className='cursor-pointer select-none text-xs opacity-70'>
+                {_('思考过程')}
+              </summary>
+              <pre className='mt-1 whitespace-pre-wrap text-xs leading-relaxed opacity-70'>
+                {aiThinking}
+              </pre>
+            </details>
+          )}
           {loading ? (
             <p className='text-base italic text-gray-500'>{_('Loading...')}</p>
           ) : (
@@ -202,7 +253,7 @@ const TranslatorPopup: React.FC<TranslatorPopupProps> = ({
           )}
         </div>
         <div className='absolute bottom-0 flex h-8 w-full items-center justify-between px-4'>
-          <div className='line-clamp-1 text-xs opacity-60'>
+          <div className='line-clamp-1 min-w-0 text-xs opacity-60'>
             {provider &&
               !loading &&
               !error &&
@@ -210,8 +261,9 @@ const TranslatorPopup: React.FC<TranslatorPopupProps> = ({
                 provider: providers.find((p) => p.name === provider)?.label,
               })}
           </div>
+          {/* 覆盖 Select 的 max-w-[60%] 上限：翻译服务下拉按内容动态伸缩，不固定宽度 */}
           <Select
-            className='not-eink:bg-gray-600 not-eink:text-white eink:bg-base-100'
+            className='not-eink:bg-gray-600 not-eink:text-white eink:bg-base-100 !max-w-full shrink-0'
             value={provider}
             onChange={handleProviderChange}
             options={providers.map(({ name: value, label, disabled }) => ({

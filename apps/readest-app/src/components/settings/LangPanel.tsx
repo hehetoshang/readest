@@ -11,6 +11,7 @@ import {
   getTranslators,
   isTranslatorAvailable,
 } from '@/services/translators';
+import { AI_PROVIDER_ID, isAIAskEnabled } from '@/services/ai/aiAsk';
 import { useResetViewSettings } from '@/hooks/useResetSettings';
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
 import { TRANSLATED_LANGS, TRANSLATOR_LANGS } from '@/services/constants';
@@ -122,18 +123,25 @@ const LangPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
   };
 
   const getTranslationProviderOptions = () => {
-    return getTranslators().map((t) => ({
-      value: t.name,
-      label: getTranslatorDisplayLabel(t, !!token, _),
-      // Providers marked `disabled` (e.g. upstream relay is down) stay in the
-      // dropdown so users can see them, but cannot be selected.
-      disabled: !!t.disabled,
-    }));
+    const aiEnabled = isAIAskEnabled(settings.aiSettings);
+    return [
+      ...getTranslators().map((t) => ({
+        value: t.name,
+        label: getTranslatorDisplayLabel(t, !!token, _),
+        // Providers marked `disabled` (e.g. upstream relay is down) stay in the
+        // dropdown so users can see them, but cannot be selected.
+        disabled: !!t.disabled,
+      })),
+      { value: AI_PROVIDER_ID, label: _('AI 翻译'), disabled: !aiEnabled },
+    ];
   };
 
   const getCurrentTranslationProviderOption = () => {
     const value = translationProvider;
     const allProviders = getTranslationProviderOptions();
+    if (value === AI_PROVIDER_ID) {
+      return allProviders.find((p) => p.value === AI_PROVIDER_ID) || allProviders[0]!;
+    }
     const availableTranslators = getTranslators().filter((t) => isTranslatorAvailable(t, !!token));
     const currentProvider = availableTranslators.find((t) => t.name === value)
       ? value

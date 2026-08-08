@@ -12,12 +12,17 @@ export const ALL_ANNOTATION_TOOL_TYPES: AnnotationToolType[] = [
   'tts',
   'proofread',
   'share',
+  'ask-ai',
 ];
 
-// Default toolbar: the eight pre-existing tools in their original order.
-// 'share' starts hidden in the Available tray per the #4014 design.
+// Default toolbar: the pre-existing tools in their original order, plus
+// 'ask-ai'. 'share' starts hidden in the Available tray per the #4014 design.
+// 'ask-ai' sits right after 'copy' so it stays inside the ~6-7 buttons the
+// selection popup shows before its hidden scroll region — at the end it was
+// unreachable without scrolling.
 export const DEFAULT_ANNOTATION_TOOLBAR_ITEMS: AnnotationToolType[] = [
   'copy',
+  'ask-ai',
   'highlight',
   'annotate',
   'search',

@@ -1,5 +1,6 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel, EmbeddingModel } from 'ai';
+import { createUnavailableEmbeddingModel } from './unavailableEmbeddingModel';
 import type { AIProvider, AISettings, AIProviderName } from '../types';
 import { aiLogger } from '../logger';
 import { AI_TIMEOUTS } from '../utils/retry';
@@ -7,7 +8,6 @@ import { getAIFetch } from '../utils/httpFetch';
 
 const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 const DEFAULT_MODEL = 'openai/gpt-4o-mini';
-const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 
 /**
  * Provider for any OpenAI-compatible /v1/chat/completions endpoint, with
@@ -66,7 +66,16 @@ export class OpenRouterProvider implements AIProvider {
   }
 
   getEmbeddingModel(): EmbeddingModel {
-    const modelId = this.settings.openrouterEmbeddingModel || DEFAULT_EMBEDDING_MODEL;
+    const modelId = this.settings.openrouterEmbeddingModel?.trim();
+    if (!modelId) {
+      // UI 语义: 留空 = "None (disable RAG)"。不要静默回退默认模型去请求
+      // /embeddings（端点可能不支持，返回无法解析的响应导致 AI SDK 报
+      // "Invalid JSON response"）。改为返回一个调用即抛清晰错误的模型。
+      return createUnavailableEmbeddingModel(
+        'openrouter',
+        'Embedding model not configured — set "Embedding Model" in AI Settings to enable RAG.',
+      );
+    }
     return this.client.textEmbeddingModel(modelId);
   }
 

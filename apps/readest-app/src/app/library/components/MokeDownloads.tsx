@@ -118,6 +118,9 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
           mokeEink: settings.globalViewSettings?.isEink ? '1' : '0',
         });
         if (mokeBookId) params.set('mokeBookId', mokeBookId);
+        if (typeof window.__MOKE_SERVER_URL === 'string') {
+          params.set('mokeServerUrl', window.__MOKE_SERVER_URL);
+        }
 
         // App Router navigation does not rerun the root launch script, which
         // normally seeds these values from the URL on a full page load.

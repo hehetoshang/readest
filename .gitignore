@@ -7,6 +7,9 @@ docker/.env
 .pnp.js
 .yarn/install-state.gz
 
+# nested vendor git clones (dev leftovers; real vendors live in ../vendor/)
+/packages/
+
 # testing
 /coverage
 

@@ -77,9 +77,11 @@ import AnnotationPopup from './AnnotationPopup';
 import DictionaryPopup from './DictionaryPopup';
 import DictionarySheet from './DictionarySheet';
 import TranslatorPopup from './TranslatorPopup';
+import AIAskPopup from './AIAskPopup';
 import useShortcuts from '@/hooks/useShortcuts';
 import ProofreadPopup from './ProofreadPopup';
 import { setProofreadRulesVisibility } from '@/app/reader/components/ProofreadRules';
+import { isAIAskEnabled } from '@/services/ai/aiAsk';
 import ExportMarkdownDialog from './ExportMarkdownDialog';
 import ImportAnnotationsDialog from './ImportAnnotationsDialog';
 import Alert from '@/components/Alert';
@@ -136,7 +138,11 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   const progress = useBookProgress(bookKey)!;
   const bookData = getBookData(bookKey)!;
   const view = getView(bookKey);
-  const viewSettings = getViewSettings(bookKey)!;
+  // 订阅 viewStates[bookKey]：getViewSettings 是 store action（不触发重渲染），
+  // 而 setViewSettings 会整体替换 viewStates[key] 为新对象，订阅它能让用户在
+  // 设置里改工具栏/布局后，选中工具栏立即刷新（不再需要重新翻页）。
+  const bookViewState = useReaderStore((s) => s.viewStates[bookKey]);
+  const viewSettings = (bookViewState?.viewSettings ?? getViewSettings(bookKey))!;
   const primaryLang = bookData.book?.primaryLanguage || 'en';
 
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -146,11 +152,13 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   const [showDictionaryPopup, setShowDictionaryPopup] = useState(false);
   const [showDeepLPopup, setShowDeepLPopup] = useState(false);
   const [showProofreadPopup, setShowProofreadPopup] = useState(false);
+  const [showAIPopup, setShowAIPopup] = useState(false);
   const [trianglePosition, setTrianglePosition] = useState<Position>();
   const [annotPopupPosition, setAnnotPopupPosition] = useState<Position>();
   const [dictPopupPosition, setDictPopupPosition] = useState<Position>();
   const [translatorPopupPosition, setTranslatorPopupPosition] = useState<Position>();
   const [proofreadPopupPosition, setProofreadPopupPosition] = useState<Position>();
+  const [aiPopupPosition, setAIPopupPosition] = useState<Position>();
   const [highlightOptionsVisible, setHighlightOptionsVisible] = useState(false);
   const [showAnnotationNotes, setShowAnnotationNotes] = useState(false);
   const [annotationNotes, setAnnotationNotes] = useState<BookNote[]>([]);
@@ -188,7 +196,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   const pendingWordLensDictRef = useRef(false);
 
   const showingPopup =
-    showAnnotPopup || showDictionaryPopup || showDeepLPopup || showProofreadPopup;
+    showAnnotPopup || showDictionaryPopup || showDeepLPopup || showProofreadPopup || showAIPopup;
 
   const popupPadding = useResponsiveSize(10);
   const trianglePadding = popupPadding * 2 + 6;
@@ -201,6 +209,8 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   const dictPopupHeight = Math.min(360, maxHeight);
   const transPopupWidth = Math.min(480, maxWidth);
   const transPopupHeight = Math.min(265, maxHeight);
+  const aiPopupWidth = Math.min(480, maxWidth);
+  const aiPopupHeight = Math.min(265, maxHeight);
   const proofreadPopupWidth = Math.min(440, maxWidth);
   const proofreadPopupHeight = Math.min(200, maxHeight);
   const canShare = canShareText(appService);
@@ -252,6 +262,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
       transPopupHeight,
       popupPadding,
     );
+    const aiPopupPos = getPopupPosition(triangPos, rect, aiPopupWidth, aiPopupHeight, popupPadding);
     const proofreadPopupPos = getPopupPosition(
       triangPos,
       rect,
@@ -263,6 +274,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     setAnnotPopupPosition(annotPopupPos);
     setDictPopupPosition(dictPopupPos);
     setTranslatorPopupPosition(transPopupPos);
+    setAIPopupPosition(aiPopupPos);
     setProofreadPopupPosition(proofreadPopupPos);
     setTrianglePosition(triangPos);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,6 +317,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
       setShowDictionaryPopup(false);
       setShowDeepLPopup(false);
       setShowProofreadPopup(false);
+      setShowAIPopup(false);
       setEditingAnnotation(null);
     }, 500),
     [],
@@ -947,6 +960,13 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
         transPopupHeight,
         popupPadding,
       );
+      const aiPopupPos = getPopupPosition(
+        triangPos,
+        rect,
+        aiPopupWidth,
+        aiPopupHeight,
+        popupPadding,
+      );
       const proofreadPopupPos = getPopupPosition(
         triangPos,
         rect,
@@ -958,6 +978,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
       setAnnotPopupPosition(annotPopupPos);
       setDictPopupPosition(dictPopupPos);
       setTranslatorPopupPosition(transPopupPos);
+      setAIPopupPosition(aiPopupPos);
       setProofreadPopupPosition(proofreadPopupPos);
       setTrianglePosition(triangPos);
 
@@ -1302,6 +1323,12 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     if (!selection || !selection.text) return;
     setShowAnnotPopup(false);
     setShowDeepLPopup(true);
+  };
+
+  const handleAskAI = () => {
+    if (!selection || !selection.text) return;
+    setShowAnnotPopup(false);
+    setShowAIPopup(true);
   };
 
   const handleSpeakText = async (oneTime = false) => {
@@ -1686,6 +1713,15 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
         };
       case 'share':
         return { tooltipText: _(label), Icon, onClick: handleShare };
+      case 'ask-ai': {
+        const askEnabled = isAIAskEnabled(settings.aiSettings);
+        return {
+          tooltipText: askEnabled ? _(label) : _('请在 设置 → AI 中启用 AI 服务'),
+          Icon,
+          onClick: handleAskAI,
+          disabled: !askEnabled,
+        };
+      }
       default:
         return null;
     }
@@ -1743,6 +1779,16 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
           trianglePosition={trianglePosition}
           popupWidth={transPopupWidth}
           popupHeight={transPopupHeight}
+          onDismiss={handleDismissPopupAndSelection}
+        />
+      )}
+      {showAIPopup && trianglePosition && aiPopupPosition && (
+        <AIAskPopup
+          text={selection?.text as string}
+          position={aiPopupPosition}
+          trianglePosition={trianglePosition}
+          popupWidth={aiPopupWidth}
+          popupHeight={aiPopupHeight}
           onDismiss={handleDismissPopupAndSelection}
         />
       )}

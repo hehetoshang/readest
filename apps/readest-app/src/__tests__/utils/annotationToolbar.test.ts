@@ -15,9 +15,10 @@ describe('annotationToolbar helpers', () => {
     expect(ALL_ANNOTATION_TOOL_TYPES).toEqual(annotationToolButtons.map((b) => b.type));
   });
 
-  test('default toolbar is the eight non-share tools in canonical order', () => {
+  test('default toolbar is the pre-existing tools plus ask-ai, without share', () => {
     expect(DEFAULT_ANNOTATION_TOOLBAR_ITEMS).toEqual([
       'copy',
+      'ask-ai',
       'highlight',
       'annotate',
       'search',
@@ -53,6 +54,7 @@ describe('annotationToolbar helpers', () => {
       'tts',
       'proofread',
       'share',
+      'ask-ai',
     ]);
   });
 

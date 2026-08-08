@@ -1,5 +1,7 @@
 import { TranslationProvider } from '../types';
-import { deeplProvider } from './deepl';
+// DeepL 需要登录/订阅（readest 账号体系）。Moke 是自托管 Talebook 客户端，
+// 没有该账号，故从可用服务中移除。需要时取消下面三处注释即可恢复。
+// import { deeplProvider } from './deepl';
 import { azureProvider } from './azure';
 import { googleProvider } from './google';
 import { yandexProvider } from './yandex';
@@ -16,13 +18,13 @@ function createTranslator<T extends string>(
   return implementation as TranslationProvider & { name: T };
 }
 
-const deeplTranslator = createTranslator('deepl', deeplProvider);
+// const deeplTranslator = createTranslator('deepl', deeplProvider);
 const azureTranslator = createTranslator('azure', azureProvider);
 const googleTranslator = createTranslator('google', googleProvider);
 const yandexTranslator = createTranslator('yandex', yandexProvider);
 
 const availableTranslators = [
-  deeplTranslator,
+  // deeplTranslator,
   azureTranslator,
   googleTranslator,
   yandexTranslator,

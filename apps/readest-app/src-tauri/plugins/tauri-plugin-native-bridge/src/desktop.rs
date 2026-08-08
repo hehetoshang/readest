@@ -352,6 +352,13 @@ impl<R: Runtime> NativeBridge<R> {
         &self,
         payload: SetSecureItemRequest,
     ) -> crate::Result<SecureItemResponse> {
+        #[cfg(target_env = "ohos")]
+        return Ok(SecureItemResponse {
+            success: false,
+            error: Some("keychain unavailable on OpenHarmony".into()),
+        });
+
+        #[cfg(not(target_env = "ohos"))]
         match keyring_entry_for(&payload.key).and_then(|e| e.set_password(&payload.value)) {
             Ok(()) => Ok(SecureItemResponse {
                 success: true,
@@ -368,6 +375,13 @@ impl<R: Runtime> NativeBridge<R> {
         &self,
         payload: GetSecureItemRequest,
     ) -> crate::Result<GetSecureItemResponse> {
+        #[cfg(target_env = "ohos")]
+        return Ok(GetSecureItemResponse {
+            value: None,
+            error: Some("keychain unavailable on OpenHarmony".into()),
+        });
+
+        #[cfg(not(target_env = "ohos"))]
         match keyring_entry_for(&payload.key).and_then(|e| e.get_password()) {
             Ok(value) => Ok(GetSecureItemResponse {
                 value: Some(value),
@@ -388,6 +402,13 @@ impl<R: Runtime> NativeBridge<R> {
         &self,
         payload: GetSecureItemRequest,
     ) -> crate::Result<SecureItemResponse> {
+        #[cfg(target_env = "ohos")]
+        return Ok(SecureItemResponse {
+            success: false,
+            error: Some("keychain unavailable on OpenHarmony".into()),
+        });
+
+        #[cfg(not(target_env = "ohos"))]
         match keyring_entry_for(&payload.key).and_then(|e| e.delete_credential()) {
             Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(SecureItemResponse {
                 success: true,
@@ -443,6 +464,7 @@ fn keyring_entry() -> std::result::Result<keyring_core::Entry, keyring_core::Err
 
 /// Keychain entry for a keyed secure item — same service as the passphrase,
 /// with the caller's `key` as the per-item account so each secret is distinct.
+#[cfg(not(target_env = "ohos"))]
 fn keyring_entry_for(key: &str) -> std::result::Result<keyring_core::Entry, keyring_core::Error> {
     keyring_core::Entry::new(KEYRING_SERVICE, key)
 }

@@ -8,6 +8,7 @@ import { BsPencilSquare } from 'react-icons/bs';
 import { BsTranslate } from 'react-icons/bs';
 import { FaHeadphones } from 'react-icons/fa6';
 import { IoIosBuild } from 'react-icons/io';
+import { LuSparkles } from 'react-icons/lu';
 import { AnnotationToolType } from '@/types/annotator';
 import { stubTranslation as _ } from '@/utils/misc';
 
@@ -96,6 +97,12 @@ export const annotationToolButtons = createAnnotationToolButtons([
     tooltip: _('Share text after selection'),
     Icon: FiShare,
     quickAction: true,
+  },
+  {
+    type: 'ask-ai',
+    label: _('AI 提问'),
+    tooltip: _('向 AI 提问选中内容'),
+    Icon: LuSparkles,
   },
 ]);
 

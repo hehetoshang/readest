@@ -2,101 +2,55 @@ import { stubTranslation as _ } from '@/utils/misc';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { isTauriAppPlatform } from '@/services/environment';
 import { TranslationProvider } from '../types';
-import { normalizeToFullLang } from '@/utils/lang';
+import { normalizeToFullLang, normalizeToShortLang } from '@/utils/lang';
 
-interface TokenCache {
-  token: string;
-  expiresAt: number;
-}
+const EDGE_TRANSLATE_ENDPOINT = 'https://edge.microsoft.com/translate/translatetext';
+// The endpoint rejects requests without an Edge-flavored UA / Origin.
+const EDGE_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
 
-let tokenCache: TokenCache | null = null;
-
-const getAuthToken = async (): Promise<string> => {
-  const now = Date.now();
-
-  if (tokenCache && tokenCache.expiresAt > now) {
-    return tokenCache.token;
-  }
-
-  try {
-    const fetch = isTauriAppPlatform() ? tauriFetch : window.fetch;
-    const tokenResponse = await fetch('https://edge.microsoft.com/translate/auth', {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-      },
-    });
-
-    if (!tokenResponse.ok) {
-      throw new Error(`Failed to get auth token: ${tokenResponse.status}`);
-    }
-
-    const token = await tokenResponse.text();
-    const expiresAt = now + 8 * 60 * 1000;
-
-    tokenCache = {
-      token,
-      expiresAt,
-    };
-
-    return token;
-  } catch (error) {
-    console.error('Error getting Microsoft translation auth token:', error);
-    throw error;
-  }
-};
-
+/**
+ * Free Microsoft translation via the Edge browser's translation endpoint.
+ * Unlike the old `edge.microsoft.com/translate/auth` anonymous token flow
+ * (which Microsoft has since closed — returns 404), `translatetext` needs no
+ * token at all: POST a JSON array of strings and each item comes back as
+ * `data[i].translations[0].text`. Omitting `from` makes it auto-detect the
+ * source language (the endpoint rejects "auto" as an explicit value).
+ */
 export const azureProvider: TranslationProvider = {
   name: 'azure',
   label: _('Azure Translator'),
   translate: async (text: string[], sourceLang: string, targetLang: string): Promise<string[]> => {
     if (!text.length) return [];
 
-    const results: string[] = [];
-    const msSourceLang = sourceLang ? normalizeToFullLang(sourceLang) : '';
-    const msTargetLang = normalizeToFullLang(targetLang);
+    const params = new URLSearchParams({ to: normalizeToFullLang(targetLang) });
+    const source = sourceLang ? normalizeToShortLang(sourceLang) : '';
+    if (source && source.toLowerCase() !== 'auto') {
+      params.append('from', source);
+    }
 
-    const translationPromises = text.map(async (line, index) => {
-      if (!line?.trim().length) {
-        results[index] = line;
-        return;
-      }
-
-      const url = 'https://api-edge.cognitive.microsofttranslator.com/translate';
-      const params = new URLSearchParams({
-        to: msTargetLang,
-        'api-version': '3.0',
-      });
-      if (msSourceLang && msSourceLang.toLowerCase() !== 'auto') {
-        params.append('from', msSourceLang);
-      }
-
-      const token = await getAuthToken();
-      const fetch = isTauriAppPlatform() ? tauriFetch : window.fetch;
-      const response = await fetch(`${url}?${params.toString()}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify([{ Text: line }]),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Translation failed with status ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (Array.isArray(data) && data.length > 0 && data[0].translations) {
-        results[index] = data[0].translations[0].text || line;
-      } else {
-        results[index] = line;
-      }
+    const fetch = isTauriAppPlatform() ? tauriFetch : window.fetch;
+    const response = await fetch(`${EDGE_TRANSLATE_ENDPOINT}?${params.toString()}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': EDGE_UA,
+        Origin: 'https://www.microsoft.com',
+      },
+      body: JSON.stringify(text),
     });
 
-    await Promise.all(translationPromises);
+    if (!response.ok) {
+      throw new Error(`Translation failed with status ${response.status}`);
+    }
 
-    return results;
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      return text.map((line, index) => {
+        if (!line?.trim().length) return line;
+        return data[index]?.translations?.[0]?.text || line;
+      });
+    }
+    return text;
   },
 };

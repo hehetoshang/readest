@@ -232,33 +232,16 @@ describe('yandexProvider', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Azure Translator Provider
+// Azure Translator Provider (Edge translatetext — no auth token needed)
 // ---------------------------------------------------------------------------
 describe('azureProvider', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    // Suppress expected error noise from token fetch failure tests.
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    // Reset the module-level token cache between tests by re-importing
-    vi.resetModules();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  /** Helper: mock fetch to handle token + translation in sequence */
-  function mockTokenAndTranslation(translationResponse: unknown) {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        text: async () => 'mock-token',
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => translationResponse,
-      });
-  }
 
   it('returns empty array for empty input', async () => {
     const { azureProvider } = await import('@/services/translators/providers/azure');
@@ -267,16 +250,43 @@ describe('azureProvider', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('translates text with token authentication', async () => {
-    mockTokenAndTranslation([{ translations: [{ text: 'Bonjour' }] }]);
+  it('translates text via the Edge translatetext endpoint', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => [{ translations: [{ text: 'Bonjour' }] }],
+    });
 
     const { azureProvider } = await import('@/services/translators/providers/azure');
     const result = await azureProvider.translate(['Hello'], 'en', 'fr');
     expect(result).toEqual(['Bonjour']);
+
+    const [url, opts] = mockFetch.mock.calls[0]!;
+    expect(url).toContain('edge.microsoft.com/translate/translatetext');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual(['Hello']);
+    expect(url).toContain('from=en');
+  });
+
+  it('omits the from param when source is AUTO so the endpoint auto-detects', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => [{ translations: [{ text: '你好' }] }],
+    });
+
+    const { azureProvider } = await import('@/services/translators/providers/azure');
+    await azureProvider.translate(['Hello'], 'AUTO', 'zh');
+    const [url] = mockFetch.mock.calls[0]!;
+    expect(url).not.toContain('from=');
+    expect(url).toContain('to=zh-Hans');
   });
 
   it('preserves empty strings', async () => {
-    mockTokenAndTranslation([{ translations: [{ text: 'Monde' }] }]);
+    // Batch response: one element per input line (the empty first line is
+    // skipped before indexing, so its entry is never read).
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => [{ translations: [{ text: '' }] }, { translations: [{ text: 'Monde' }] }],
+    });
 
     const { azureProvider } = await import('@/services/translators/providers/azure');
     const result = await azureProvider.translate(['', 'World'], 'en', 'fr');
@@ -284,29 +294,12 @@ describe('azureProvider', () => {
     expect(result[1]).toBe('Monde');
   });
 
-  it('throws when token fetch fails', async () => {
-    mockFetch.mockResolvedValueOnce({
+  it('throws when the translation request fails', async () => {
+    mockFetch.mockResolvedValue({
       ok: false,
-      status: 403,
+      status: 500,
+      json: async () => ({}),
     });
-
-    const { azureProvider } = await import('@/services/translators/providers/azure');
-    await expect(azureProvider.translate(['Hello'], 'en', 'fr')).rejects.toThrow(
-      'Failed to get auth token: 403',
-    );
-  });
-
-  it('throws when translation request fails', async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        text: async () => 'token',
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: async () => ({}),
-      });
 
     const { azureProvider } = await import('@/services/translators/providers/azure');
     await expect(azureProvider.translate(['Hello'], 'en', 'fr')).rejects.toThrow(
@@ -315,7 +308,10 @@ describe('azureProvider', () => {
   });
 
   it('falls back to original text when response format is unexpected', async () => {
-    mockTokenAndTranslation([]);
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
 
     const { azureProvider } = await import('@/services/translators/providers/azure');
     const result = await azureProvider.translate(['Hello'], 'en', 'fr');

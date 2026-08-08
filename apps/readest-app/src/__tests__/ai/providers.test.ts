@@ -256,6 +256,37 @@ describe('OpenRouterProvider', () => {
     await provider.healthCheck();
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/v1/models', expect.any(Object));
   });
+
+  test('getEmbeddingModel throws a clear error when embedding model is not configured', async () => {
+    const settings: AISettings = {
+      ...DEFAULT_AI_SETTINGS,
+      enabled: true,
+      provider: 'openrouter',
+      openrouterApiKey: 'sk-or-test',
+      openrouterEmbeddingModel: '',
+    };
+    const provider = new OpenRouterProvider(settings);
+
+    const model = provider.getEmbeddingModel();
+    // No HTTP call is made — the placeholder model fails fast with an
+    // actionable message instead of an opaque "Invalid JSON response".
+    await expect(model.doEmbed({ values: ['hello'] })).rejects.toThrow(
+      /Embedding model not configured/,
+    );
+  });
+
+  test('getEmbeddingModel falls back to the configured embedding model', () => {
+    const settings: AISettings = {
+      ...DEFAULT_AI_SETTINGS,
+      enabled: true,
+      provider: 'openrouter',
+      openrouterApiKey: 'sk-or-test',
+      openrouterEmbeddingModel: 'text-embedding-3-small',
+    };
+    const provider = new OpenRouterProvider(settings);
+
+    expect(() => provider.getEmbeddingModel()).not.toThrow();
+  });
 });
 
 describe('getAIProvider', () => {

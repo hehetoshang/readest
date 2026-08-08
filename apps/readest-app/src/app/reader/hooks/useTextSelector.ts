@@ -253,6 +253,13 @@ export const useTextSelector = (
     lastPointerType.current = ev.pointerType;
     isPointerDown.current = true;
 
+    // 兜底：选中弹窗打开时，点击书籍区域（iframe 内）先关闭它。readest 的
+    // `iframe-single-click` 桥接在部分嵌入 WebView（Moke）里不触发，导致工具栏
+    // 卡住只能按 Esc。左键按下即关闭；弹窗在外层 DOM，点击弹窗本身不会走到这里。
+    if (isPopuped.current && ev.button === 0) {
+      handleDismissPopup();
+    }
+
     if (isInstantAnnotationEnabled()) {
       const eligible = handleInstantAnnotationPointerDown(doc, index, ev);
       if (!eligible) return;

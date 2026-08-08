@@ -115,7 +115,11 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       tab: 'AI',
       icon: PiRobot,
       label: _('AI Assistant'),
-      disabled: process.env.NODE_ENV === 'production',
+      // 生产构建默认隐藏 AI 面板（readest 内测策略）。Moke 内嵌阅读器需要
+      // 暴露 AI 配置入口（AI 提问功能依赖它），内嵌模式下始终显示。
+      disabled:
+        process.env.NODE_ENV === 'production' &&
+        !(typeof window !== 'undefined' && (window as any).__MOKE_EMBEDDED),
     },
     {
       tab: 'TTS',

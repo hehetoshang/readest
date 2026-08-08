@@ -1,4 +1,5 @@
 import { TranslatorName } from './providers';
+import { AI_PROVIDER_ID } from '@/services/ai/aiAsk';
 
 export interface TranslationProvider {
   name: string;
@@ -27,7 +28,7 @@ export interface TranslationCache {
 }
 
 export interface UseTranslatorOptions {
-  provider?: TranslatorName;
+  provider?: TranslatorName | typeof AI_PROVIDER_ID;
   sourceLang?: string;
   targetLang?: string;
   enablePolishing?: boolean;

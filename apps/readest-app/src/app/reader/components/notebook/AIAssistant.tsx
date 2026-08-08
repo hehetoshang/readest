@@ -16,6 +16,7 @@ import { useReaderStore } from '@/store/readerStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useAIChatStore } from '@/store/aiChatStore';
 import { aiLogger, createTauriAdapter } from '@/services/ai';
+import { describeAIError } from '@/services/ai/utils/describeError';
 import {
   LegacyIdbBackend,
   ReedyBackend,
@@ -320,6 +321,7 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const [isIndexing, setIsIndexing] = useState(false);
   const [indexProgress, setIndexProgress] = useState<EmbeddingProgress | null>(null);
   const [indexed, setIndexed] = useState(false);
+  const [indexError, setIndexError] = useState<string | null>(null);
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
 
   const bookHash = bookKey.split('-')[0] || '';
@@ -359,11 +361,14 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
   const handleIndex = useCallback(async () => {
     if (!bookData?.bookDoc || !aiSettings || !backend) return;
     setIsIndexing(true);
+    setIndexError(null);
     try {
       await backend.indexBook(bookData.bookDoc, bookHash, { onProgress: setIndexProgress });
       setIndexed(true);
     } catch (e) {
-      aiLogger.rag.indexError(bookHash, (e as Error).message);
+      const message = describeAIError(e, 'Indexing');
+      aiLogger.rag.indexError(bookHash, message);
+      setIndexError(message);
     } finally {
       setIsIndexing(false);
       setIndexProgress(null);
@@ -422,6 +427,11 @@ const LegacyAIAssistant = ({ bookKey }: AIAssistantProps) => {
           <BookOpenIcon className='mr-1.5 size-3.5' />
           {_('Start Indexing')}
         </Button>
+        {indexError && (
+          <p className='text-error mt-1 max-w-[260px] break-words text-xs' role='alert'>
+            {indexError}
+          </p>
+        )}
       </div>
     );
   }
