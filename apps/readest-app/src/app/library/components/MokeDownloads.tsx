@@ -98,10 +98,22 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
       const mokeBookId = book.id.startsWith('legacy:') ? undefined : book.bookId || undefined;
 
       // `open_reader` creates a separate window and is intentionally only
-      // compiled for desktop. Mobile has a single WebView, so opening a Moke
-      // download must navigate that WebView to the bundled reader instead.
-      const currentPlatform = await platform();
-      if (currentPlatform === 'android' || currentPlatform === 'ios') {
+      // compiled for desktop. Mobile and OHOS have a single WebView, so opening
+      // a Moke download must navigate that WebView to the bundled reader instead.
+      // Moke exposes `moke_runtime_platform` because plugin-os reports OHOS as
+      // `linux` (target_os == linux), which would otherwise fall through to the
+      // desktop `open_reader` path.
+      let currentPlatform: string;
+      try {
+        currentPlatform = await invoke<string>('moke_runtime_platform');
+      } catch {
+        currentPlatform = await platform();
+      }
+      if (
+        currentPlatform === 'android' ||
+        currentPlatform === 'ios' ||
+        currentPlatform === 'ohos'
+      ) {
         const params = new URLSearchParams({
           file: book.filePath,
           moke: '1',
