@@ -1,3 +1,8 @@
+//! Moke embedded reader: the nightly updater is disabled (tauri-plugin-updater
+//! is not a dependency). This module is not compiled — `mod nightly_update` in
+//! lib.rs is commented out. Kept for reference in case the updater is ever
+//! re-enabled.
+
 //! Nightly update channel: base-aware version comparator + verify/install
 //! commands. The comparator mirrors `src/utils/version.ts::isUpdateNewer` and is
 //! validated against the same matrix.
