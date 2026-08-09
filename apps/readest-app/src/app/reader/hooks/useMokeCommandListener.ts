@@ -27,8 +27,15 @@ interface CommandPayload {
   location?: string;
 }
 
+/** `window.__MOKE_RESTORE_PROGRESS` 的运行时结构（由 Moke launch script 注入）。 */
+interface RestoreProgress {
+  location?: string;
+  section_href?: string;
+  fraction?: number;
+}
+
 function isEmbedded(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__MOKE_EMBEDDED;
+  return typeof window !== 'undefined' && !!window.__MOKE_EMBEDDED;
 }
 
 function getPrimaryKey(bookKeys: string[]): string | null {
@@ -120,6 +127,10 @@ export function useMokeCommandListener(bookKeys: string[]) {
   useEffect(() => {
     if (!isEmbedded()) return;
 
+    // H20-L5: `@tauri-apps/api/window` 是异步 import，组件可能在 import
+    // resolve 之前就卸载。用 disposed 标志：resolve 后若已卸载，立即
+    // unlisten，避免监听器永久挂在窗口上泄漏。
+    let disposed = false;
     let unlisten: (() => void) | undefined;
 
     import('@tauri-apps/api/window')
@@ -139,13 +150,18 @@ export function useMokeCommandListener(bookKeys: string[]) {
         });
       })
       .then((cleanup) => {
-        unlisten = cleanup;
+        if (disposed) {
+          cleanup();
+        } else {
+          unlisten = cleanup;
+        }
       })
       .catch((err) => {
         console.warn('[mokeCommand] could not listen for reader:command:', err);
       });
 
     return () => {
+      disposed = true;
       unlisten?.();
     };
   }, []);
@@ -153,13 +169,13 @@ export function useMokeCommandListener(bookKeys: string[]) {
   useEffect(() => {
     if (!isEmbedded() || restoredRef.current || bookKeys.length === 0) return;
 
-    const restoreProgress = (window as any).__MOKE_RESTORE_PROGRESS;
+    const restoreProgress = window.__MOKE_RESTORE_PROGRESS;
     if (!restoreProgress || typeof restoreProgress !== 'object') return;
 
-    const location = typeof restoreProgress.location === 'string' ? restoreProgress.location : '';
-    const href =
-      typeof restoreProgress.section_href === 'string' ? restoreProgress.section_href : '';
-    const fraction = typeof restoreProgress.fraction === 'number' ? restoreProgress.fraction : null;
+    const progress = restoreProgress as RestoreProgress;
+    const location = typeof progress.location === 'string' ? progress.location : '';
+    const href = typeof progress.section_href === 'string' ? progress.section_href : '';
+    const fraction = typeof progress.fraction === 'number' ? progress.fraction : null;
     const command: CommandPayload | null = location
       ? { command: 'go_to_location', location }
       : href
@@ -170,31 +186,64 @@ export function useMokeCommandListener(bookKeys: string[]) {
 
     if (!command) return;
 
+    // H20-L2: 恢复命令不再固定重试 20×250ms（5s）就放弃。大书 / 慢设备上
+    // view 可能迟迟没有 attach，5s 窗口内抓不到就永久 `restoredRef=true`，
+    // 本次会话不再恢复。改为：
+    //  1. 监听 readerStore，等主 view `inited` 后再执行恢复命令；
+    //  2. 兜底用带退避的重试（次数与间隔放宽），避免订阅漏触发。
     let cancelled = false;
     let attempts = 0;
-    restoredRef.current = true;
+    let timer: number | null = null;
+
+    const reportResultSafe = (ok: boolean, resultOrError: unknown) => {
+      reportResult({ ...command, request_id: 'moke-restore-progress' }, ok, resultOrError);
+    };
 
     const tryRestore = () => {
-      if (cancelled) return;
+      if (cancelled || restoredRef.current) return;
       attempts += 1;
 
       try {
         executeCommand(command, bookKeysRef.current);
-        reportResult({ ...command, request_id: 'moke-restore-progress' }, true, { restored: true });
+        restoredRef.current = true;
+        if (timer) window.clearTimeout(timer);
+        timer = null;
+        reportResultSafe(true, { restored: true });
       } catch (err) {
-        if (attempts < 20) {
-          window.setTimeout(tryRestore, 250);
-          return;
+        // 退避：250ms 起步，翻倍封顶 4s；最多 60 次（远大于原 20 次）。
+        const delay = Math.min(250 * Math.pow(2, Math.min(attempts - 1, 4)), 4000);
+        if (attempts < 60) {
+          timer = window.setTimeout(tryRestore, delay);
+        } else {
+          // 终态：无论成功与否都标记本次会话已处理，避免把旧的
+          // __MOKE_RESTORE_PROGRESS 重放到后续打开的书上。
+          restoredRef.current = true;
+          const message = err instanceof Error ? err.message : String(err);
+          reportResultSafe(false, message);
         }
-        const message = err instanceof Error ? err.message : String(err);
-        reportResult({ ...command, request_id: 'moke-restore-progress' }, false, message);
       }
     };
 
-    window.setTimeout(tryRestore, 250);
+    // 主 view 就绪（book:opened / viewer ready）后再执行恢复命令，
+    // 避免在 view 尚未 attach 时空转耗尽重试次数。
+    const primaryKey = getPrimaryKey(bookKeysRef.current);
+    const unsub = useReaderStore.subscribe((state) => {
+      if (cancelled || restoredRef.current) return;
+      const viewState = primaryKey ? state.viewStates[primaryKey] : null;
+      if (viewState?.inited && viewState?.view) {
+        if (timer) window.clearTimeout(timer);
+        timer = null;
+        tryRestore();
+      }
+    });
+
+    // 启动一个初始的尝试（若 view 已就绪则立即成功，否则进入退避重试）。
+    timer = window.setTimeout(tryRestore, 250);
 
     return () => {
       cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      unsub();
     };
   }, [bookKeys]);
 }

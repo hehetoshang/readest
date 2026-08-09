@@ -25,6 +25,40 @@ interface ParsedMokeBookMetadata {
   coverUrl?: string;
 }
 
+/**
+ * 从 Moke 服务器取回该书上次的阅读进度（schema
+ * `moke.readest.progress.v1`），供全文档导航把 `mokeRestoreProgress`
+ * 放进 URL，由 launch script 注入到 `window.__MOKE_RESTORE_PROGRESS`。
+ * 返回 null 表示没有可恢复的进度（首次阅读 / 服务器不支持）。
+ */
+async function fetchMokeRestoreProgress(
+  serverUrl: string,
+  mokeBookId: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+    const response = await tauriFetch(
+      `${serverUrl}/api/book/${encodeURIComponent(mokeBookId)}/progress`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        maxRedirections: 5,
+        danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
+      } as unknown as RequestInit,
+    );
+    const data = (await response.json()) as {
+      progress?: { schema?: string } & Record<string, unknown>;
+    };
+    const progress = data?.progress;
+    if (!progress || progress.schema !== 'moke.readest.progress.v1') return null;
+    return progress;
+  } catch (error) {
+    console.warn('[MokeDownloads] 读取阅读进度失败:', error);
+    return null;
+  }
+}
+
 const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
   const _ = useTranslation();
   const router = useRouter();
@@ -112,22 +146,31 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
         currentPlatform === 'ios' ||
         currentPlatform === 'ohos'
       ) {
+        // 单 WebView 平台必须走全文档导航（与 Moke 详情页 detail/page.tsx
+        // 统一）：OHOS 上 App Router 的 RSC 导航不可靠，SPA router.push 会白屏。
+        // 先取回服务器进度，再把 mokeRestoreProgress/mokeBookId/mokeServerUrl
+        // 全部放进 URL，由 layout.tsx 的 launch script 在整页加载时解析注入，
+        // 不再手工种全局变量。
+        const serverUrl =
+          typeof window.__MOKE_SERVER_URL === 'string' ? window.__MOKE_SERVER_URL : '';
+        const restoreProgress =
+          mokeBookId && serverUrl ? await fetchMokeRestoreProgress(serverUrl, mokeBookId) : null;
+
         const params = new URLSearchParams({
           file: book.filePath,
           moke: '1',
           mokeEink: settings.globalViewSettings?.isEink ? '1' : '0',
         });
         if (mokeBookId) params.set('mokeBookId', mokeBookId);
-        if (typeof window.__MOKE_SERVER_URL === 'string') {
-          params.set('mokeServerUrl', window.__MOKE_SERVER_URL);
-        }
+        if (serverUrl) params.set('mokeServerUrl', serverUrl);
+        if (restoreProgress) params.set('mokeRestoreProgress', JSON.stringify(restoreProgress));
 
-        // App Router navigation does not rerun the root launch script, which
-        // normally seeds these values from the URL on a full page load.
-        window.__MOKE_EMBEDDED = true;
-        window.__MOKE_EINK = settings.globalViewSettings?.isEink ?? false;
-        window.__MOKE_BOOK_ID = mokeBookId ?? null;
-        window.__MOKE_RESTORE_PROGRESS = null;
+        try {
+          await invoke('moke_navigate', { path: `/readest/reader?${params.toString()}` });
+          return;
+        } catch (error) {
+          console.warn('moke_navigate failed, falling back to router navigation:', error);
+        }
         router.push(`/reader?${params.toString()}`);
         return;
       }
