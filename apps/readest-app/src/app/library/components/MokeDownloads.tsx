@@ -11,6 +11,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { formatTitle } from '@/utils/book';
 import { tryNativeParseEpub } from '@/utils/tauriEpubBridge';
+import { resolveMokeRuntimePlatform } from '@/utils/mokePlatform';
 
 interface MokeDownloadedBook {
   id: string;
@@ -18,6 +19,7 @@ interface MokeDownloadedBook {
   title: string;
   fileName: string;
   filePath: string;
+  updatedAt?: number;
 }
 
 interface ParsedMokeBookMetadata {
@@ -59,6 +61,17 @@ async function fetchMokeRestoreProgress(
   }
 }
 
+interface CachedMokeBookMetadata {
+  title: string;
+  coverBlob: Blob | null;
+}
+
+/**
+ * 封面解析结果缓存：按 `filePath:updatedAt` 缓存标题与封面 Blob，避免每次
+ * 进入"Moke 下载"都对每本书重新 `tryNativeParseEpub`（Rust 侧整文件读入
+ * 内存）。Blob 缓存跨挂载复用，object URL 在每个挂载周期内单独创建/回收。
+ */
+const coverParseCache = new Map<string, CachedMokeBookMetadata | null>();
 const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
   const _ = useTranslation();
   const router = useRouter();
@@ -89,14 +102,25 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
     const coverUrls: string[] = [];
 
     void Promise.all(
-      books.map(async (book) => {
-        const parsed = await tryNativeParseEpub(book.filePath);
-        if (!parsed) return [book.id, null] as const;
-
-        const cover = await parsed.bookDoc.getCover();
-        const coverUrl = cover ? URL.createObjectURL(cover) : undefined;
-        if (coverUrl) coverUrls.push(coverUrl);
-        return [book.id, { title: formatTitle(parsed.bookDoc.metadata.title), coverUrl }] as const;
+      books.map(async (book): Promise<[string, ParsedMokeBookMetadata | null]> => {
+        const cacheKey = `${book.filePath}:${book.updatedAt ?? ''}`;
+        let cached = coverParseCache.get(cacheKey);
+        if (cached === undefined) {
+          const parsed = await tryNativeParseEpub(book.filePath);
+          cached = parsed
+            ? {
+                title: formatTitle(parsed.bookDoc.metadata.title),
+                coverBlob: (await parsed.bookDoc.getCover()) ?? null,
+              }
+            : null;
+          coverParseCache.set(cacheKey, cached);
+        }
+        if (!cached || !cached.coverBlob) {
+          return [book.id, cached ? { title: cached.title } : null] as const;
+        }
+        const coverUrl = URL.createObjectURL(cached.coverBlob);
+        coverUrls.push(coverUrl);
+        return [book.id, { title: cached.title, coverUrl }] as const;
       }),
     )
       .then((results) => {
@@ -106,6 +130,13 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
           if (meta) metadata[id] = meta;
         }
         setBookMetadata(metadata);
+        // 只保留当前在库书籍的缓存项，避免 WebView 长会话内不断累积
+        const currentKeys = new Set(
+          books.map((book) => `${book.filePath}:${book.updatedAt ?? ''}`),
+        );
+        for (const key of coverParseCache.keys()) {
+          if (!currentKeys.has(key)) coverParseCache.delete(key);
+        }
       })
       .catch((error) => console.warn('Failed to read Moke book metadata:', error));
 
@@ -139,7 +170,11 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
       try {
         currentPlatform = await invoke<string>('moke_runtime_platform');
       } catch {
-        currentPlatform = await platform();
+        // 原生探测失败时回退到 plugin-os，但它在 OHOS 上报告为 `linux`
+        // （target_os == linux）；结合 ArkWeb/OpenHarmony UA 仍按单 WebView
+        // 处理，避免走到桌面 `open_reader`（OHOS 上未注册）。
+        const fallback = await platform();
+        currentPlatform = resolveMokeRuntimePlatform(null, fallback, navigator.userAgent);
       }
       if (
         currentPlatform === 'android' ||

@@ -98,6 +98,23 @@ export function throttleEntryCount(): number {
   return _throttleEntries.size;
 }
 
+/**
+ * 冲刷所有挂起的 trailing 节流事件（如 page:changed），返回的 Promise 在全部
+ * 发出后 resolve。关闭书籍时调用，确保最后一条翻页事件不因窗口销毁而丢失。
+ */
+function flushThrottledEvents(): Promise<void> {
+  const pending: Array<Promise<void>> = [];
+  for (const [event, entry] of _throttleEntries) {
+    if (entry.timer) {
+      clearTimeout(entry.timer);
+      entry.timer = null;
+      entry.lastSent = Date.now();
+      pending.push(_doEmit(event, entry.latest));
+    }
+  }
+  return Promise.all(pending).then(() => undefined);
+}
+
 // ---------------------------------------------------------------------------
 // Embedded check
 // ---------------------------------------------------------------------------
@@ -228,9 +245,12 @@ export function emitReaderEvent(event: string, data: Record<string, unknown>): P
     scheduleProgressSave(data);
   }
 
-  // 关闭书籍前先冲刷待保存的进度，确保最后一页不丢失。
+  // 关闭书籍前先冲刷待保存的进度与挂起的节流事件（trailing page:changed），
+  // 确保最后一页的进度与事件都不丢失。
   if (event === 'book:closed') {
-    return flushProgressSave().then(() => _doEmit(event, data));
+    return flushProgressSave()
+      .then(() => flushThrottledEvents())
+      .then(() => _doEmit(event, data));
   }
 
   if (THROTTLED_EVENTS.has(event)) {

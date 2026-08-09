@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // The reader persists progress to the Moke server through the Tauri HTTP
 // plugin. Stub it so the unit environment stays free of Tauri internals.
-const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
+const { fetchMock, invokeMock } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  invokeMock: vi.fn(),
+}));
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: fetchMock }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
 import { emitReaderEvent } from '@/services/mokeBridge';
 
@@ -14,6 +17,8 @@ describe('mokeBridge server-side progress persistence', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue({ status: 200 } as Response);
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
     window.__MOKE_EMBEDDED = true;
     window.__MOKE_SERVER_URL = SERVER_URL;
     window.__MOKE_BOOK_ID = '42';
@@ -106,5 +111,29 @@ describe('mokeBridge server-side progress persistence', () => {
     const call = fetchMock.mock.calls[0]!;
     const url = call[0];
     expect(url).toBe(`${SERVER_URL}/api/book/42/progress`);
+  });
+
+  it('flushes a pending throttled page:changed before book:closed', async () => {
+    window.__MOKE_SERVER_URL = null;
+
+    // _throttleEntries 是模块级状态：先冲刷可能残留的 trailing timer，
+    // 让后续断言不受其他用例的节流窗口影响。
+    void emitReaderEvent('page:changed', { book_id: 'reset' });
+    await vi.advanceTimersByTimeAsync(600);
+    invokeMock.mockClear();
+
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'epubcfi(/6/1)', page: 1 });
+    await vi.advanceTimersByTimeAsync(100);
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'epubcfi(/6/2)', page: 2 });
+
+    await emitReaderEvent('book:closed', { book_id: 'abc123' });
+
+    const calls = invokeMock.mock.calls;
+    expect(calls).toHaveLength(2);
+    const events = calls.map((call) => (call[1] as { event: string }).event);
+    expect(events).toEqual(['page:changed', 'book:closed']);
+    const flushed = calls[0]![1] as { data: { location: string; page: number } };
+    expect(flushed.data.location).toBe('epubcfi(/6/2)');
+    expect(flushed.data.page).toBe(2);
   });
 });
