@@ -160,6 +160,13 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
     try {
       const mokeBookId = book.id.startsWith('legacy:') ? undefined : book.bookId || undefined;
 
+      // 与详情页入口一致：打开前先取回服务器进度，再把它交给阅读器恢复
+      // （H20-M2）。无 mokeBookId 的旧下载没有归属，跳过恢复。
+      const serverUrl =
+        typeof window.__MOKE_SERVER_URL === 'string' ? window.__MOKE_SERVER_URL : '';
+      const restoreProgress =
+        mokeBookId && serverUrl ? await fetchMokeRestoreProgress(serverUrl, mokeBookId) : null;
+
       // `open_reader` creates a separate window and is intentionally only
       // compiled for desktop. Mobile and OHOS have a single WebView, so opening
       // a Moke download must navigate that WebView to the bundled reader instead.
@@ -186,11 +193,6 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
         // 先取回服务器进度，再把 mokeRestoreProgress/mokeBookId/mokeServerUrl
         // 全部放进 URL，由 layout.tsx 的 launch script 在整页加载时解析注入，
         // 不再手工种全局变量。
-        const serverUrl =
-          typeof window.__MOKE_SERVER_URL === 'string' ? window.__MOKE_SERVER_URL : '';
-        const restoreProgress =
-          mokeBookId && serverUrl ? await fetchMokeRestoreProgress(serverUrl, mokeBookId) : null;
-
         const params = new URLSearchParams({
           file: book.filePath,
           moke: '1',
@@ -210,10 +212,13 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
         return;
       }
 
+      // 桌面 reader 窗口由主窗口的 ReaderProgressProvider 保存进度，这里不传
+      // serverUrl，避免与直存重复保存（HOU-6 M3）。
       await invoke('open_reader', {
         filePath: book.filePath,
         eink: settings.globalViewSettings?.isEink ?? false,
         mokeBookId,
+        restoreProgress,
       });
     } catch (error) {
       console.error('Failed to open Moke downloaded book:', error);

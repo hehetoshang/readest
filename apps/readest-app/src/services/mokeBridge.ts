@@ -120,13 +120,13 @@ function flushThrottledEvents(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function isEmbedded(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__MOKE_EMBEDDED;
+  return typeof window !== 'undefined' && !!window.__MOKE_EMBEDDED;
 }
 
 function withMokeContext(data: Record<string, unknown>): Record<string, unknown> {
   if (typeof window === 'undefined') return data;
 
-  const mokeBookId = (window as any).__MOKE_BOOK_ID;
+  const mokeBookId = window.__MOKE_BOOK_ID;
   if (!mokeBookId || data['moke_book_id']) return data;
 
   return {
@@ -151,8 +151,32 @@ function withMokeContext(data: Record<string, unknown>): Record<string, unknown>
 
 const PROGRESS_SAVE_DEBOUNCE_MS = 1200;
 
-let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingProgress: Record<string, unknown> | null = null;
+interface PendingProgressEntry {
+  timer: ReturnType<typeof setTimeout> | null;
+  latest: Record<string, unknown> | null;
+}
+
+// Direct-save state is slotted per book (view_key, falling back to the reader
+// book hash), mirroring the desktop ReaderProgressProvider's per-book Map. A
+// single global slot would let one book's pending progress be overwritten by
+// another book's page turns in a multi-book session (H20-M1).
+const progressSlots = new Map<string, PendingProgressEntry>();
+
+// Reader book hash -> moke_book_id, captured when each book opens. In the
+// single-WebView runtime window.__MOKE_BOOK_ID is global and only reflects the
+// most recently opened book, so attributing direct-save to it would write a
+// book's progress under a sibling's moke_book_id once the session opens more
+// than one book (H20-M1).
+const mokeBookIdByBook = new Map<string, string>();
+
+// Servers that don't implement the reading-progress API answer every POST with
+// a 404. Remember one such response and stop direct-saving for the rest of the
+// session instead of 404ing on every debounce window (H20-L3).
+let progressApiUnsupported = false;
+
+// Background/close flush listeners are only installed once, lazily, when the
+// first direct-save is scheduled.
+let progressFlushListenersRegistered = false;
 
 function progressStringValue(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
@@ -165,15 +189,44 @@ function progressNumberValue(value: unknown): number | undefined {
   return value;
 }
 
+function progressSlotKey(data: Record<string, unknown>): string | null {
+  const viewKey = progressStringValue(data['view_key']);
+  if (viewKey) return viewKey;
+  const bookId = progressStringValue(data['book_id']);
+  if (bookId) return `book:${bookId}`;
+  return null;
+}
+
+function resolveMokeBookId(data: Record<string, unknown>): string {
+  const bookId = progressStringValue(data['book_id']);
+  if (bookId) {
+    const mapped = mokeBookIdByBook.get(bookId);
+    if (mapped) return mapped;
+  }
+  const global = window.__MOKE_BOOK_ID;
+  return global ? String(global) : '';
+}
+
+function registerBookMokeId(data: Record<string, unknown>): void {
+  if (typeof window.__MOKE_SERVER_URL !== 'string') return;
+  const bookId = progressStringValue(data['book_id']);
+  if (!bookId) return;
+  const global = window.__MOKE_BOOK_ID;
+  if (!global) return;
+  mokeBookIdByBook.set(bookId, String(global));
+}
+
 async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<void> {
-  const serverUrl = (window as any).__MOKE_SERVER_URL;
-  const mokeBookId = (window as any).__MOKE_BOOK_ID;
+  if (progressApiUnsupported) return;
+
+  const serverUrl = window.__MOKE_SERVER_URL;
+  const mokeBookId = resolveMokeBookId(data);
   if (typeof serverUrl !== 'string' || !serverUrl || !mokeBookId) return;
 
   const payload = {
     schema: 'moke.readest.progress.v1',
     reader: 'readest',
-    moke_book_id: String(mokeBookId),
+    moke_book_id: mokeBookId,
     reader_book_id: progressStringValue(data['book_id']),
     view_key: progressStringValue(data['view_key']),
     location: progressStringValue(data['location']),
@@ -188,14 +241,21 @@ async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<
 
   try {
     const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-    await tauriFetch(`${serverUrl}/api/book/${String(mokeBookId)}/progress`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ progress: payload }),
-      credentials: 'include',
-      maxRedirections: 5,
-      danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
-    } as unknown as RequestInit);
+    const response = await tauriFetch(
+      `${serverUrl}/api/book/${encodeURIComponent(mokeBookId)}/progress`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progress: payload }),
+        credentials: 'include',
+        maxRedirections: 5,
+        danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
+      } as unknown as RequestInit,
+    );
+    if (response.status === 404) {
+      progressApiUnsupported = true;
+      console.warn('[mokeBridge] Moke 服务器不支持阅读进度 API，本会话停止直存。');
+    }
   } catch (error) {
     // 尽力而为：保存失败不打断阅读，下一次翻页或关闭书籍时会重试。
     console.warn('[mokeBridge] 保存阅读进度到 Moke 服务器失败:', error);
@@ -203,25 +263,55 @@ async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<
 }
 
 function scheduleProgressSave(data: Record<string, unknown>): void {
-  pendingProgress = data;
-  if (progressSaveTimer) clearTimeout(progressSaveTimer);
-  progressSaveTimer = setTimeout(() => {
-    progressSaveTimer = null;
-    const latest = pendingProgress;
-    pendingProgress = null;
+  ensureProgressFlushListeners();
+  const slotKey = progressSlotKey(data);
+  if (!slotKey) return;
+  let entry = progressSlots.get(slotKey);
+  if (!entry) {
+    entry = { timer: null, latest: null };
+    progressSlots.set(slotKey, entry);
+  }
+  entry.latest = data;
+  if (entry.timer) clearTimeout(entry.timer);
+  entry.timer = setTimeout(() => {
+    entry.timer = null;
+    const latest = entry.latest;
+    entry.latest = null;
     if (latest) void saveProgressToMokeServer(latest);
   }, PROGRESS_SAVE_DEBOUNCE_MS);
 }
 
-function flushProgressSave(): Promise<void> {
-  if (progressSaveTimer) {
-    clearTimeout(progressSaveTimer);
-    progressSaveTimer = null;
+function flushProgressSlot(slotKey: string): Promise<void> {
+  const entry = progressSlots.get(slotKey);
+  if (!entry) return Promise.resolve();
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
   }
-  const latest = pendingProgress;
-  pendingProgress = null;
+  const latest = entry.latest;
+  entry.latest = null;
+  progressSlots.delete(slotKey);
   if (!latest) return Promise.resolve();
   return saveProgressToMokeServer(latest);
+}
+
+function flushProgressSave(): Promise<void> {
+  const slots = Array.from(progressSlots.keys());
+  return Promise.all(slots.map((slotKey) => flushProgressSlot(slotKey))).then(() => undefined);
+}
+
+function ensureProgressFlushListeners(): void {
+  if (typeof window === 'undefined' || progressFlushListenersRegistered) return;
+  progressFlushListenersRegistered = true;
+  // 切后台 / 页面销毁时同步冲刷，避免防抖窗口内最后一条直存丢落盘（H20-L1）。
+  window.addEventListener('pagehide', () => {
+    void flushProgressSave();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      void flushProgressSave();
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -241,16 +331,32 @@ export function emitReaderEvent(event: string, data: Record<string, unknown>): P
   if (!isEmbedded()) return Promise.resolve();
 
   // 单 WebView 运行时宿主应用已被卸载，这里由阅读器直接保存进度。
-  if (event === 'page:changed' && typeof (window as any).__MOKE_SERVER_URL === 'string') {
+  if (
+    event === 'page:changed' &&
+    typeof window.__MOKE_SERVER_URL === 'string' &&
+    !progressApiUnsupported
+  ) {
     scheduleProgressSave(data);
   }
 
-  // 关闭书籍前先冲刷待保存的进度与挂起的节流事件（trailing page:changed），
-  // 确保最后一页的进度与事件都不丢失。
+  // 书籍打开时记录该书的 moke_book_id，供后续直存按书正确归属（H20-M1）。
+  if (event === 'book:opened') {
+    registerBookMokeId(data);
+  }
+
+  // 关闭书籍前先冲刷该书的待保存进度与挂起的节流事件（trailing
+  // page:changed），确保最后一页的进度与事件都不丢失；其他仍在阅读的书的
+  // 直存互不影响。冲刷完成后再清理该书映射，避免 flush 落回全局 id。
   if (event === 'book:closed') {
-    return flushProgressSave()
+    const slotKey = progressSlotKey(data);
+    const flush = slotKey ? flushProgressSlot(slotKey) : flushProgressSave();
+    return flush
       .then(() => flushThrottledEvents())
-      .then(() => _doEmit(event, data));
+      .then(() => {
+        const bookId = progressStringValue(data['book_id']);
+        if (bookId) mokeBookIdByBook.delete(bookId);
+        return _doEmit(event, data);
+      });
   }
 
   if (THROTTLED_EVENTS.has(event)) {
@@ -274,3 +380,13 @@ export function bookEventData(book: Book): Record<string, unknown> {
     language: book.primaryLanguage ?? '',
   };
 }
+
+/** Test-only: reset the direct-save module state between unit tests. */
+export const __resetMokeBridgeProgressForTests = (): void => {
+  for (const entry of progressSlots.values()) {
+    if (entry.timer) clearTimeout(entry.timer);
+  }
+  progressSlots.clear();
+  mokeBookIdByBook.clear();
+  progressApiUnsupported = false;
+};

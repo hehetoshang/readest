@@ -9,7 +9,7 @@ const { fetchMock, invokeMock } = vi.hoisted(() => ({
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: fetchMock }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
-import { emitReaderEvent } from '@/services/mokeBridge';
+import { emitReaderEvent, __resetMokeBridgeProgressForTests } from '@/services/mokeBridge';
 
 const SERVER_URL = 'http://192.168.1.5:8080';
 
@@ -22,6 +22,7 @@ describe('mokeBridge server-side progress persistence', () => {
     window.__MOKE_EMBEDDED = true;
     window.__MOKE_SERVER_URL = SERVER_URL;
     window.__MOKE_BOOK_ID = '42';
+    __resetMokeBridgeProgressForTests();
     vi.useFakeTimers();
   });
 
@@ -29,6 +30,7 @@ describe('mokeBridge server-side progress persistence', () => {
     vi.useRealTimers();
     window.__MOKE_SERVER_URL = null;
     window.__MOKE_BOOK_ID = null;
+    window.__MOKE_EMBEDDED = false;
   });
 
   it('posts page:changed progress to the Moke server after the debounce window', async () => {
@@ -135,5 +137,114 @@ describe('mokeBridge server-side progress persistence', () => {
     const flushed = calls[0]![1] as { data: { location: string; page: number } };
     expect(flushed.data.location).toBe('epubcfi(/6/2)');
     expect(flushed.data.page).toBe(2);
+  });
+
+  it('slots pending progress per book in a multi-book session', async () => {
+    window.__MOKE_BOOK_ID = '42';
+    void emitReaderEvent('book:opened', { book_id: 'abc123', view_key: 'abc123-1' });
+    window.__MOKE_BOOK_ID = '7';
+    void emitReaderEvent('book:opened', { book_id: 'def456', view_key: 'def456-1' });
+
+    void emitReaderEvent('page:changed', {
+      book_id: 'abc123',
+      view_key: 'abc123-1',
+      location: 'epubcfi(/6/1)',
+      page: 1,
+    });
+    void emitReaderEvent('page:changed', {
+      book_id: 'def456',
+      view_key: 'def456-1',
+      location: 'epubcfi(/6/2)',
+      page: 2,
+    });
+
+    await vi.advanceTimersByTimeAsync(1300);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const urls = fetchMock.mock.calls.map((call) => call[0]);
+    expect(urls).toContain(`${SERVER_URL}/api/book/42/progress`);
+    expect(urls).toContain(`${SERVER_URL}/api/book/7/progress`);
+    const bookA = fetchMock.mock.calls.find(
+      (call) => call[0] === `${SERVER_URL}/api/book/42/progress`,
+    )!;
+    const bodyA = JSON.parse((bookA[1] as RequestInit).body as string);
+    expect(bodyA.progress.reader_book_id).toBe('abc123');
+    const bookB = fetchMock.mock.calls.find(
+      (call) => call[0] === `${SERVER_URL}/api/book/7/progress`,
+    )!;
+    const bodyB = JSON.parse((bookB[1] as RequestInit).body as string);
+    expect(bodyB.progress.reader_book_id).toBe('def456');
+  });
+
+  it('book:closed flushes only the closed book, keeping siblings pending', async () => {
+    window.__MOKE_BOOK_ID = '42';
+    void emitReaderEvent('book:opened', { book_id: 'abc123', view_key: 'abc123-1' });
+    window.__MOKE_BOOK_ID = '7';
+    void emitReaderEvent('book:opened', { book_id: 'def456', view_key: 'def456-1' });
+
+    void emitReaderEvent('page:changed', {
+      book_id: 'abc123',
+      view_key: 'abc123-1',
+      location: 'epubcfi(/6/1)',
+      page: 1,
+    });
+    void emitReaderEvent('page:changed', {
+      book_id: 'def456',
+      view_key: 'def456-1',
+      location: 'epubcfi(/6/2)',
+      page: 2,
+    });
+
+    await emitReaderEvent('book:closed', { book_id: 'abc123', view_key: 'abc123-1' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${SERVER_URL}/api/book/42/progress`);
+
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![0]).toBe(`${SERVER_URL}/api/book/7/progress`);
+  });
+
+  it('stops direct-saving for the session after one 404 from the server', async () => {
+    fetchMock.mockResolvedValueOnce({ status: 404 } as Response);
+
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'epubcfi(/6/1)', page: 1 });
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // A second debounce window must not hit the server again this session.
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'epubcfi(/6/2)', page: 2 });
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Closing the book should not flush to the unsupported API either.
+    await emitReaderEvent('book:closed', { book_id: 'abc123' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushes pending progress synchronously on pagehide', async () => {
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'epubcfi(/6/1)', page: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${SERVER_URL}/api/book/42/progress`);
+  });
+
+  it('flushes pending progress synchronously when the page is hidden', async () => {
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'epubcfi(/6/1)', page: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${SERVER_URL}/api/book/42/progress`);
   });
 });
