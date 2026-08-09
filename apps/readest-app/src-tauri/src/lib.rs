@@ -454,7 +454,7 @@ pub fn open_reader_window(
         // malicious book content) could invoke `open_reader` with an
         // arbitrary path and permanently widen the persistent fs/asset scopes.
         let books_dir = app.path().app_data_dir().map(|dir| dir.join("books"));
-        if is_reader_scope_grantable(books_dir.as_deref(), app.fs_scope().is_allowed(f), f) {
+        if is_reader_scope_grantable(books_dir.ok().as_deref(), app.fs_scope().is_allowed(f), f) {
             allow_file_in_scopes(app, vec![f.clone()]);
         } else {
             log::warn!("open_reader refused scope grant for path outside books dir / fs_scope: {f:?}");
