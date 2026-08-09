@@ -16,7 +16,7 @@ use tauri::utils::config::BackgroundThrottlingPolicy;
 #[cfg(target_os = "macos")]
 use tauri::TitleBarStyle;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_fs::FsExt;
 
@@ -236,6 +236,7 @@ async fn start_server(window: Window) -> Result<u16, String> {
 }
 
 #[tauri::command]
+#[allow(dead_code)] // registered only by the standalone entry point; not exposed to the embedded (Moke) reader handler
 fn get_environment_variable(name: &str) -> String {
     std::env::var(String::from(name)).unwrap_or(String::from(""))
 }
@@ -383,6 +384,55 @@ pub fn manage_reader_state(_app: &AppHandle) {}
 ///
 /// Each call creates a fresh `reader-<n>` window; the label prefix matches the
 /// `reader-*` capability pattern so the window inherits the right permissions.
+///
+/// HOU-15 H2: before widening the persistent fs/asset scopes we require the
+/// path to be either a Moke-downloaded book (`app_data_dir()/books`) or already
+/// allowed in `fs_scope`. Kept as a pure, dependency-free decision so it can be
+/// unit-tested without a running Tauri app.
+#[cfg(desktop)]
+fn is_reader_scope_grantable(books_dir: Option<&Path>, fs_allowed: bool, path: &Path) -> bool {
+    let in_books_dir = match books_dir {
+        Some(books_dir) => path.starts_with(books_dir),
+        None => false,
+    };
+    in_books_dir || fs_allowed
+}
+
+#[cfg(all(test, desktop))]
+mod open_reader_scope_tests {
+    use super::*;
+
+    #[test]
+    fn refuses_paths_outside_books_dir_and_fs_scope() {
+        let books_dir = Path::new("/home/u/AppData/app/books");
+        let path = Path::new("/home/u/.ssh/id_rsa");
+        assert!(!is_reader_scope_grantable(Some(books_dir), false, path));
+        assert!(!is_reader_scope_grantable(None, false, path));
+    }
+
+    #[test]
+    fn allows_paths_inside_books_dir() {
+        let books_dir = Path::new("/home/u/AppData/app/books");
+        let path = Path::new("/home/u/AppData/app/books/2024/foo.epub");
+        assert!(is_reader_scope_grantable(Some(books_dir), false, path));
+    }
+
+    #[test]
+    fn refuses_sibling_prefix_like_books_evil() {
+        let books_dir = Path::new("/home/u/AppData/app/books");
+        // `/booksX/...` is not under `/books` (Path::starts_with is component-wise).
+        let path = Path::new("/home/u/AppData/app/booksX/foo.epub");
+        assert!(!is_reader_scope_grantable(Some(books_dir), false, path));
+    }
+
+    #[test]
+    fn allows_paths_already_allowed_in_fs_scope() {
+        let books_dir = Path::new("/home/u/AppData/app/books");
+        let picked = Path::new("/home/u/Downloads/foo.epub");
+        assert!(is_reader_scope_grantable(Some(books_dir), true, picked));
+    }
+}
+
 #[cfg(desktop)]
 pub fn open_reader_window(
     app: &AppHandle,
@@ -395,7 +445,20 @@ pub fn open_reader_window(
     static READER_SEQ: AtomicUsize = AtomicUsize::new(0);
 
     if let Some(ref f) = file {
-        allow_file_in_scopes(app, vec![f.clone()]);
+        // Only grant fs/asset scopes for a path the host is allowed to hand
+        // to the reader: either a Moke-downloaded book under
+        // `app_data_dir()/books`, or a path already present in `fs_scope`
+        // (e.g. user-picked through the OS dialog and granted by the dialog
+        // plugin). Mirrors the `fs_scope.is_allowed` gate used by
+        // `allow_paths_in_scopes`; without it, any webview script (including
+        // malicious book content) could invoke `open_reader` with an
+        // arbitrary path and permanently widen the persistent fs/asset scopes.
+        let books_dir = app.path().app_data_dir().map(|dir| dir.join("books"));
+        if is_reader_scope_grantable(books_dir.ok().as_deref(), app.fs_scope().is_allowed(f), f) {
+            allow_file_in_scopes(app, vec![f.clone()]);
+        } else {
+            log::warn!("open_reader refused scope grant for path outside books dir / fs_scope: {f:?}");
+        }
     }
 
     let files_js = match &file {
@@ -500,7 +563,6 @@ pub fn reader_invoke_handler(
         start_server,
         download_file,
         upload_file,
-        get_environment_variable,
         get_executable_dir,
         allow_paths_in_scopes,
         dir_scanner::read_dir,
