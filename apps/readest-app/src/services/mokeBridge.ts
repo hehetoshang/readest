@@ -56,7 +56,7 @@ function throttledEmit(event: string, data: Record<string, unknown>) {
   let entry = _throttleEntries.get(event);
 
   if (!entry || now - entry.lastSent >= THROTTLE_MS) {
-    // Leading edge: emit immediately
+    // Leading edge: emit immediately.
     if (entry) {
       if (entry.timer) clearTimeout(entry.timer);
       entry.lastSent = now;
@@ -64,24 +64,38 @@ function throttledEmit(event: string, data: Record<string, unknown>) {
       entry = { lastSent: now, timer: null, latest: data };
       _throttleEntries.set(event, entry);
     }
+    entry.latest = data;
+    // Release the entry once the throttle window elapses with no further
+    // events, so _throttleEntries never retains idle state.
+    entry.timer = setTimeout(() => {
+      _throttleEntries.delete(event);
+    }, THROTTLE_MS);
     _doEmit(event, data);
     return;
   }
 
-  // Within throttle window: store latest, schedule trailing emit
+  // Within throttle window: store latest, schedule trailing emit.
   entry.latest = data;
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = setTimeout(
     () => {
-      const e = _throttleEntries.get(event);
-      if (e) {
-        e.lastSent = Date.now();
-        e.timer = null;
-        _doEmit(event, e.latest);
-      }
+      _doEmit(event, entry.latest);
+      entry.lastSent = Date.now();
+      // Keep throttling for events that resume right after the trailing emit,
+      // then release the entry once a full window passes without new events.
+      entry.timer = setTimeout(() => {
+        _throttleEntries.delete(event);
+      }, THROTTLE_MS);
     },
     THROTTLE_MS - (now - entry.lastSent),
   );
+}
+
+/**
+ * 仅测试用：当前节流表中存留的事件条目数。生产逻辑不依赖此值。
+ */
+export function throttleEntryCount(): number {
+  return _throttleEntries.size;
 }
 
 // ---------------------------------------------------------------------------
