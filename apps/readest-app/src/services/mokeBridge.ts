@@ -103,13 +103,13 @@ export function throttleEntryCount(): number {
 // ---------------------------------------------------------------------------
 
 function isEmbedded(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__MOKE_EMBEDDED;
+  return typeof window !== 'undefined' && !!window.__MOKE_EMBEDDED;
 }
 
 function withMokeContext(data: Record<string, unknown>): Record<string, unknown> {
   if (typeof window === 'undefined') return data;
 
-  const mokeBookId = (window as any).__MOKE_BOOK_ID;
+  const mokeBookId = window.__MOKE_BOOK_ID;
   if (!mokeBookId || data['moke_book_id']) return data;
 
   return {
@@ -149,8 +149,8 @@ function progressNumberValue(value: unknown): number | undefined {
 }
 
 async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<void> {
-  const serverUrl = (window as any).__MOKE_SERVER_URL;
-  const mokeBookId = (window as any).__MOKE_BOOK_ID;
+  const serverUrl = window.__MOKE_SERVER_URL;
+  const mokeBookId = window.__MOKE_BOOK_ID;
   if (typeof serverUrl !== 'string' || !serverUrl || !mokeBookId) return;
 
   const payload = {
@@ -170,6 +170,28 @@ async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<
   };
 
   try {
+    if (window.__TALEBOOK_EMBEDDED) {
+      const target = new URL(
+        `/api/book/${encodeURIComponent(String(mokeBookId))}/progress`,
+        window.location.origin,
+      );
+      const response = await fetch(target.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progress: payload }),
+        credentials: 'same-origin',
+        keepalive: true,
+      });
+      if (!response.ok) {
+        throw new Error(`Talebook progress request failed (${response.status})`);
+      }
+      const result: unknown = await response.json();
+      if (!result || typeof result !== 'object' || !('err' in result) || result.err !== 'ok') {
+        throw new Error('Talebook progress response was rejected');
+      }
+      return;
+    }
+
     const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
     await tauriFetch(`${serverUrl}/api/book/${String(mokeBookId)}/progress`, {
       method: 'POST',
@@ -224,7 +246,7 @@ export function emitReaderEvent(event: string, data: Record<string, unknown>): P
   if (!isEmbedded()) return Promise.resolve();
 
   // 单 WebView 运行时宿主应用已被卸载，这里由阅读器直接保存进度。
-  if (event === 'page:changed' && typeof (window as any).__MOKE_SERVER_URL === 'string') {
+  if (event === 'page:changed' && typeof window.__MOKE_SERVER_URL === 'string') {
     scheduleProgressSave(data);
   }
 

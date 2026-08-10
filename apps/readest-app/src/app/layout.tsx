@@ -131,7 +131,9 @@ const devHmrPatchScript = `(${patchTauriHmrWebSocket.toString()})(${JSON.stringi
 // 'export'`), so the file isn't emitted — the request would return the SPA
 // fallback HTML and crash with `Unexpected token '<'`. All runtime-config
 // consumers fall back to `NEXT_PUBLIC_*` envs baked at build time on Tauri.
-const shouldInjectRuntimeConfig = process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'web';
+const shouldInjectRuntimeConfig =
+  process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'web' &&
+  process.env['NEXT_PUBLIC_TALEBOOK_EMBEDDED'] !== 'true';
 
 // Mobile Moke opens the embedded reader in its only WebView. Bootstrap the
 // host context before React starts so the reader handles the file, e-ink mode,
@@ -143,6 +145,7 @@ const mokeLaunchContextScript = `(() => {
   window.__MOKE_EINK = params.get('mokeEink') === '1';
   window.__MOKE_BOOK_ID = params.get('mokeBookId') || null;
   window.__MOKE_SERVER_URL = params.get('mokeServerUrl') || null;
+  window.__TALEBOOK_EMBEDDED = params.get('talebook') === '1';
   const progress = params.get('mokeRestoreProgress');
   if (!progress) return;
   try {

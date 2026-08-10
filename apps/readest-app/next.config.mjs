@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const isDev = process.env['NODE_ENV'] === 'development';
 const appPlatform = process.env['NEXT_PUBLIC_APP_PLATFORM'];
+const talebookEmbedded = process.env['NEXT_PUBLIC_TALEBOOK_EMBEDDED'] === 'true';
 
 if (isDev) {
   const { initOpenNextCloudflareForDev } = await import('@opennextjs/cloudflare');
@@ -17,7 +18,7 @@ if (isDev) {
 // assets are served under a distinct prefix (e.g. /readest/) and don't
 // collide with the host's own /_next/static/... assets.
 const embeddedBasePath = process.env['NEXT_PUBLIC_EMBEDDED_BASE_PATH'];
-const exportOutput = appPlatform !== 'web' && !isDev;
+const exportOutput = (appPlatform !== 'web' || talebookEmbedded) && !isDev;
 // Opt-in standalone output, set only by the Docker production build
 // (Dockerfile). Every other path keeps the original behavior: Tauri `export`,
 // local `build-web` (output undefined), dev, and the Cloudflare/OpenNext
@@ -75,7 +76,7 @@ const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ['isows'],
   allowedDevOrigins: ['127.0.0.1', 'localhost', '192.168.2.120'],
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       nunjucks: 'nunjucks/browser/nunjucks.js',
@@ -162,7 +163,7 @@ const nextConfig = {
   },
 };
 
-const pwaDisabled = isDev || appPlatform !== 'web';
+const pwaDisabled = isDev || appPlatform !== 'web' || talebookEmbedded;
 
 const withPWA = pwaDisabled
   ? (config) => config
