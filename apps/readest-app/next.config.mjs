@@ -80,8 +80,11 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       nunjucks: 'nunjucks/browser/nunjucks.js',
-      '@pdfjs': path.resolve(__dirname, 'public/vendor/pdfjs'),
-      '@simplecc': path.resolve(__dirname, 'public/vendor/simplecc'),
+      '@pdfjs/pdf.min.mjs$': path.resolve(__dirname, 'public/vendor/pdfjs/pdf.min.mjs'),
+      '@simplecc/simplecc_wasm$': path.resolve(
+        __dirname,
+        'public/vendor/simplecc/simplecc_wasm.js',
+      ),
       'construct-style-sheets-polyfill': path.resolve(
         __dirname,
         'node_modules/construct-style-sheets-polyfill',
