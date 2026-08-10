@@ -581,6 +581,9 @@ importers:
       node-env-run:
         specifier: ^4.0.2
         version: 4.0.2
+      pdfjs-dist:
+        specifier: ^5.7.284
+        version: 5.7.284
       playwright:
         specifier: ^1.58.2
         version: 1.60.0
