@@ -80,6 +80,12 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       nunjucks: 'nunjucks/browser/nunjucks.js',
+      '@pdfjs': path.resolve(__dirname, 'public/vendor/pdfjs'),
+      '@simplecc': path.resolve(__dirname, 'public/vendor/simplecc'),
+      'construct-style-sheets-polyfill': path.resolve(
+        __dirname,
+        'node_modules/construct-style-sheets-polyfill',
+      ),
       // `js-mdict` is consumed as TS source via tsconfig paths from
       // `packages/js-mdict/src/`; its sources `import 'fflate'` directly.
       // Without an alias, webpack walks up from that source location and
