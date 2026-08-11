@@ -485,7 +485,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   }, [libraryBooks]);
 
   const processOpenWithFiles = useCallback(
-    async (appService: AppService, openWithFiles: string[], libraryBooks: Book[]) => {
+    async (appService: AppService, openWithFiles: Array<File | string>, libraryBooks: Book[]) => {
       const settings = await appService.loadSettings();
       const bookIds: string[] = [];
       for (const file of openWithFiles) {

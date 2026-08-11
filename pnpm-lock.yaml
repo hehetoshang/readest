@@ -64,6 +64,40 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  ../vendor/foliate-js:
+    dependencies:
+      construct-style-sheets-polyfill:
+        specifier: ^3.1.0
+        version: 3.1.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.9.1
+        version: 9.39.4
+      '@rollup/plugin-node-resolve':
+        specifier: ^15.2.3
+        version: 15.3.1(rollup@4.60.3)
+      '@rollup/plugin-terser':
+        specifier: ^0.4.4
+        version: 0.4.4(rollup@4.60.3)
+      '@zip.js/zip.js':
+        specifier: ^2.7.52
+        version: 2.8.26
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
+      fs-extra:
+        specifier: ^11.2.0
+        version: 11.3.5
+      globals:
+        specifier: ^15.9.0
+        version: 15.15.0
+      pdfjs-dist:
+        specifier: ^5.7.284
+        version: 5.7.284
+      rollup:
+        specifier: '>=4.59.0'
+        version: 4.60.3
+
   apps/readest-app:
     dependencies:
       '@ai-sdk/openai-compatible':
@@ -171,12 +205,6 @@ importers:
       '@stripe/stripe-js':
         specifier: ^9.3.1
         version: 9.4.0
-      '@supabase/auth-ui-react':
-        specifier: ^0.4.7
-        version: 0.4.7(@supabase/supabase-js@2.105.4)
-      '@supabase/auth-ui-shared':
-        specifier: ^0.1.8
-        version: 0.1.8(@supabase/supabase-js@2.105.4)
       '@supabase/supabase-js':
         specifier: ^2.76.1
         version: 2.105.4
@@ -261,6 +289,9 @@ importers:
       cmdk:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      construct-style-sheets-polyfill:
+        specifier: ^3.1.0
+        version: 3.1.0
       cors:
         specifier: ^2.8.5
         version: 2.8.6
@@ -275,7 +306,7 @@ importers:
         version: 0.8.2
       foliate-js:
         specifier: workspace:*
-        version: link:../../packages/foliate-js
+        version: link:../../../vendor/foliate-js
       franc-min:
         specifier: ^6.2.0
         version: 6.2.0
@@ -527,8 +558,8 @@ importers:
         specifier: ^1.0.30001746
         version: 1.0.30001792
       cpx2:
-        specifier: ^8.0.0
-        version: 8.0.2
+        specifier: 8.0.0
+        version: 8.0.0
       daisyui:
         specifier: ^4.12.24
         version: 4.12.24(postcss@8.5.14)
@@ -550,6 +581,9 @@ importers:
       node-env-run:
         specifier: ^4.0.2
         version: 4.0.2
+      pdfjs-dist:
+        specifier: ^5.7.284
+        version: 5.7.284
       playwright:
         specifier: ^1.58.2
         version: 1.60.0
@@ -664,40 +698,6 @@ importers:
       wrangler:
         specifier: ^4.0.0
         version: 4.90.0(@cloudflare/workers-types@4.20260518.1)
-
-  packages/foliate-js:
-    dependencies:
-      construct-style-sheets-polyfill:
-        specifier: ^3.1.0
-        version: 3.1.0
-    devDependencies:
-      '@eslint/js':
-        specifier: ^9.9.1
-        version: 9.39.4
-      '@rollup/plugin-node-resolve':
-        specifier: ^15.2.3
-        version: 15.3.1(rollup@4.60.3)
-      '@rollup/plugin-terser':
-        specifier: ^0.4.4
-        version: 0.4.4(rollup@4.60.3)
-      '@zip.js/zip.js':
-        specifier: ^2.7.52
-        version: 2.8.26
-      fflate:
-        specifier: ^0.8.2
-        version: 0.8.2
-      fs-extra:
-        specifier: ^11.2.0
-        version: 11.3.5
-      globals:
-        specifier: ^15.9.0
-        version: 15.15.0
-      pdfjs-dist:
-        specifier: ^5.7.284
-        version: 5.7.284
-      rollup:
-        specifier: '>=4.59.0'
-        version: 4.60.3
 
 packages:
 
@@ -3239,9 +3239,6 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@stitches/core@1.2.8':
-    resolution: {integrity: sha512-Gfkvwk9o9kE9r9XNBmJRfV8zONvXThnm1tcuojL04Uy5uRyqg93DC83lDebl0rocZCfKSjUv+fWYtMQmEDJldg==}
-
   '@stripe/react-stripe-js@6.3.0':
     resolution: {integrity: sha512-N1FTRNCMKySElDz1lAsf/m6Oy5vcl6LRVXcW29t0Y3U3HYOAqCBlk6nuDsR2x7SAuaXkVCjnpCqrNbA/7l74jg==}
     peerDependencies:
@@ -3256,16 +3253,6 @@ packages:
   '@supabase/auth-js@2.105.4':
     resolution: {integrity: sha512-Ejfa37M5xoIwoxVebxRahnwubPo8g22qkXQ4p50+N9MIvU9UZoN+A8dwVPtczzGf8oV/YXN80ZPxK4aWXuSN/A==}
     engines: {node: '>=20.0.0'}
-
-  '@supabase/auth-ui-react@0.4.7':
-    resolution: {integrity: sha512-Lp4FQGFh7BMX1Y/BFaUKidbryL7eskj1fl6Lby7BeHrTctbdvDbCMjVKS8wZ2rxuI8FtPS2iU900fSb70FHknQ==}
-    peerDependencies:
-      '@supabase/supabase-js': ^2.21.0
-
-  '@supabase/auth-ui-shared@0.1.8':
-    resolution: {integrity: sha512-ouQ0DjKcEFg+0gZigFIEgu01V3e6riGZPzgVD0MJsCBNsMsiDT74+GgCEIElMUpTGkwSja3xLwdFRFgMNFKcjg==}
-    peerDependencies:
-      '@supabase/supabase-js': ^2.21.0
 
   '@supabase/functions-js@2.105.4':
     resolution: {integrity: sha512-JVNKbBft3Qkja+WlGaE026AJ2AH9K0UTsxsfvEIHgd4zFrBor4BYRCrYFrv9IDsvVqkF72wKDsODJl5GY/C4tA==}
@@ -4708,8 +4695,8 @@ packages:
   cose-base@2.2.0:
     resolution: {integrity: sha512-AzlgcsCbUMymkADOJtQm3wO9S3ltPfYOFD5033keQn9NJzIbtnZj+UdBJe7DYml/8TdbtHJW3j58SOnKhWY/5g==}
 
-  cpx2@8.0.2:
-    resolution: {integrity: sha512-exLFEIh8XgWthEtrEq8hs+S6jxM5ZHpjQnRH6D7VU+2uAYS3amLSVOUSuirfx3HeN7WBCq+xFygHpt7l+gQtUA==}
+  cpx2@8.0.0:
+    resolution: {integrity: sha512-RxD9jrSVNSOmfcbiPlr3XnKbUKH9K1w2HCv0skczUKhsZTueiDBecxuaSAKQkYSLQaGVA4ZQJZlTj5hVNNEvKg==}
     engines: {node: ^20.0.0 || >=22.0.0, npm: '>=10'}
     hasBin: true
 
@@ -4968,9 +4955,9 @@ packages:
   debounce@1.2.1:
     resolution: {integrity: sha512-XRRe6Glud4rd/ZGQfiV1ruXSfbvfJedlV9Y6zOlP+2K04vBYiJEte6stfFkCP03aMnY5tsipamumUjL14fofug==}
 
-  debounce@3.0.0:
-    resolution: {integrity: sha512-64byRbF0/AirwbuHqB3/ZpMG9/nckDa6ZA0yd6UnaQNwbbemCOwvz2sL5sjXLHhZHADyiwLm0M5qMhltUUx+TA==}
-    engines: {node: '>=20'}
+  debounce@2.2.0:
+    resolution: {integrity: sha512-Xks6RUDLZFdz8LIdR6q0MTH44k7FikOmnh5xkSjMig6ch45afc8sjTjRQf3P6ax8dMgcQrYO/AR2RGWURrruqw==}
+    engines: {node: '>=18'}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -5838,8 +5825,8 @@ packages:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
 
-  ignore@7.0.5:
-    resolution: {integrity: sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg==}
+  ignore@6.0.2:
+    resolution: {integrity: sha512-InwqeHHN2XpumIkMvpl/DCJVrAHgCsG5+cn1XlnLWGwtZBm8QJfSusItfrwx81CTp5agNZqpKU2J/ccC5nGT4A==}
     engines: {node: '>= 4'}
 
   immediate@3.0.6:
@@ -7168,11 +7155,6 @@ packages:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
 
-  react-dom@18.3.1:
-    resolution: {integrity: sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==}
-    peerDependencies:
-      react: ^18.3.1
-
   react-dom@19.2.5:
     resolution: {integrity: sha512-J5bAZz+DXMMwW/wV3xzKke59Af6CHY7G4uYLN1OvBcKEsWOs4pQExj86BBKamxl/Ik5bx9whOrvBlSDfWzgSag==}
     peerDependencies:
@@ -7283,10 +7265,6 @@ packages:
     peerDependencies:
       react: ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
-  react@18.3.1:
-    resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
-    engines: {node: '>=0.10.0'}
 
   react@19.2.5:
     resolution: {integrity: sha512-llUJLzz1zTUBrskt2pwZgLq59AemifIftw4aB7JxOqf1HY2FDaGDxgwpAPVzHU1kdWabH7FauP4i1oEeer2WCA==}
@@ -7511,9 +7489,6 @@ packages:
   saxes@6.0.0:
     resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
     engines: {node: '>=v12.22.7'}
-
-  scheduler@0.23.2:
-    resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
 
   scheduler@0.27.0:
     resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
@@ -11669,8 +11644,6 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@stitches/core@1.2.8': {}
-
   '@stripe/react-stripe-js@6.3.0(@stripe/stripe-js@9.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@stripe/stripe-js': 9.4.0
@@ -11683,19 +11656,6 @@ snapshots:
   '@supabase/auth-js@2.105.4':
     dependencies:
       tslib: 2.8.1
-
-  '@supabase/auth-ui-react@0.4.7(@supabase/supabase-js@2.105.4)':
-    dependencies:
-      '@stitches/core': 1.2.8
-      '@supabase/auth-ui-shared': 0.1.8(@supabase/supabase-js@2.105.4)
-      '@supabase/supabase-js': 2.105.4
-      prop-types: 15.8.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-
-  '@supabase/auth-ui-shared@0.1.8(@supabase/supabase-js@2.105.4)':
-    dependencies:
-      '@supabase/supabase-js': 2.105.4
 
   '@supabase/functions-js@2.105.4':
     dependencies:
@@ -13318,17 +13278,23 @@ snapshots:
     dependencies:
       layout-base: 2.0.1
 
-  cpx2@8.0.2:
+  cpx2@8.0.0:
     dependencies:
-      debounce: 3.0.0
+      debounce: 2.2.0
+      debug: 4.4.3(supports-color@8.1.1)
+      duplexer: 0.1.2
+      fs-extra: 11.3.5
       glob: 13.0.6
       glob2base: 0.0.12
-      ignore: 7.0.5
+      ignore: 6.0.2
       minimatch: 10.2.5
       p-map: 7.0.4
       resolve: 1.22.12
+      safe-buffer: 5.2.1
       shell-quote: 1.8.4
       subarg: 1.0.0
+    transitivePeerDependencies:
+      - supports-color
 
   crc-32@1.2.2: {}
 
@@ -13628,7 +13594,7 @@ snapshots:
 
   debounce@1.2.1: {}
 
-  debounce@3.0.0: {}
+  debounce@2.2.0: {}
 
   debug@4.4.3(supports-color@8.1.1):
     dependencies:
@@ -14661,7 +14627,7 @@ snapshots:
 
   ignore@5.3.2: {}
 
-  ignore@7.0.5: {}
+  ignore@6.0.2: {}
 
   immediate@3.0.6: {}
 
@@ -16207,12 +16173,6 @@ snapshots:
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
 
-  react-dom@18.3.1(react@18.3.1):
-    dependencies:
-      loose-envify: 1.4.0
-      react: 18.3.1
-      scheduler: 0.23.2
-
   react-dom@19.2.5(react@19.2.5):
     dependencies:
       react: 19.2.5
@@ -16324,10 +16284,6 @@ snapshots:
       memoize-one: 5.2.1
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
-
-  react@18.3.1:
-    dependencies:
-      loose-envify: 1.4.0
 
   react@19.2.5: {}
 
@@ -16634,10 +16590,6 @@ snapshots:
   saxes@6.0.0:
     dependencies:
       xmlchars: 2.2.0
-
-  scheduler@0.23.2:
-    dependencies:
-      loose-envify: 1.4.0
 
   scheduler@0.27.0: {}
 
