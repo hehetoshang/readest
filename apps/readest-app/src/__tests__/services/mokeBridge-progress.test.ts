@@ -11,18 +11,12 @@ import { emitReaderEvent } from '@/services/mokeBridge';
 const SERVER_URL = 'http://192.168.1.5:8080';
 
 describe('mokeBridge server-side progress persistence', () => {
-  const browserFetchMock = vi.fn();
-
   beforeEach(() => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue({ status: 200 } as Response);
     window.__MOKE_EMBEDDED = true;
     window.__MOKE_SERVER_URL = SERVER_URL;
     window.__MOKE_BOOK_ID = '42';
-    window.__TALEBOOK_EMBEDDED = false;
-    browserFetchMock.mockReset();
-    browserFetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ err: 'ok' }) });
-    vi.stubGlobal('fetch', browserFetchMock);
     vi.useFakeTimers();
   });
 
@@ -30,8 +24,6 @@ describe('mokeBridge server-side progress persistence', () => {
     vi.useRealTimers();
     window.__MOKE_SERVER_URL = null;
     window.__MOKE_BOOK_ID = null;
-    window.__TALEBOOK_EMBEDDED = false;
-    vi.unstubAllGlobals();
   });
 
   it('posts page:changed progress to the Moke server after the debounce window', async () => {
@@ -114,23 +106,5 @@ describe('mokeBridge server-side progress persistence', () => {
     const call = fetchMock.mock.calls[0]!;
     const url = call[0];
     expect(url).toBe(`${SERVER_URL}/api/book/42/progress`);
-  });
-
-  it('uses same-origin browser fetch for Talebook embedded progress', async () => {
-    window.__TALEBOOK_EMBEDDED = true;
-
-    void emitReaderEvent('page:changed', {
-      book_id: 'abc123',
-      location: 'epubcfi(/6/8)',
-      page: 8,
-    });
-    await vi.advanceTimersByTimeAsync(1300);
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(browserFetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = browserFetchMock.mock.calls[0]!;
-    expect(url).toBe(`${window.location.origin}/api/book/42/progress`);
-    expect((init as RequestInit).credentials).toBe('same-origin');
-    expect((init as RequestInit).keepalive).toBe(true);
   });
 });

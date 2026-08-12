@@ -10,7 +10,6 @@ declare global {
     __MOKE_BOOK_ID?: string | null;
     __MOKE_SERVER_URL?: string | null;
     __MOKE_RESTORE_PROGRESS?: unknown;
-    __TALEBOOK_EMBEDDED?: boolean;
   }
 }
 
@@ -23,37 +22,6 @@ const parseWindowOpenWithFiles = () => {
   const params = new URLSearchParams(window.location.search);
   const files = params.getAll('file');
   return files.length > 0 ? files : window.OPEN_WITH_FILES;
-};
-
-const parseTalebookEmbeddedFile = async (): Promise<File | null> => {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('talebook') !== '1') return null;
-
-  const fileUrl = params.get('file');
-  const bookId = params.get('mokeBookId');
-  if (!fileUrl || !bookId || !/^\d+$/.test(bookId)) {
-    throw new Error('Talebook embedded launch parameters are invalid');
-  }
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(fileUrl);
-  } catch {
-    throw new Error('Talebook embedded file URL is invalid');
-  }
-  if (parsedUrl.protocol !== 'blob:' || parsedUrl.origin !== window.location.origin) {
-    throw new Error('Talebook embedded file URL must be a same-origin blob URL');
-  }
-
-  const response = await fetch(fileUrl, { credentials: 'same-origin' });
-  if (!response.ok) {
-    throw new Error(`Talebook embedded file could not be loaded (${response.status})`);
-  }
-  const blob = await response.blob();
-  if (blob.size === 0) {
-    throw new Error('Talebook embedded file is empty');
-  }
-  return new File([blob], `talebook-${bookId}.epub`, { type: 'application/epub+zip' });
 };
 
 const parseCLIOpenWithFiles = async () => {
@@ -125,10 +93,7 @@ export const shouldOpenTransient = (
 };
 
 export const parseOpenWithFiles = async (appService: AppService | null) => {
-  if (isWebAppPlatform()) {
-    const talebookFile = await parseTalebookEmbeddedFile();
-    return talebookFile ? [talebookFile] : [];
-  }
+  if (isWebAppPlatform()) return [];
 
   let files = parseWindowOpenWithFiles();
   if ((!files || files.length === 0) && hasCli()) {

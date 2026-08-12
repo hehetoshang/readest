@@ -56,45 +56,6 @@ describe('parseOpenWithFiles', () => {
 
       expect(result).toEqual([]);
     });
-
-    test('loads a Talebook embedded EPUB from a same-origin blob URL', async () => {
-      mockIsWebAppPlatform = true;
-      const blobUrl = 'blob:https://talebook.test/epub-object';
-      Object.defineProperty(window, 'location', {
-        value: {
-          ...window.location,
-          origin: 'https://talebook.test',
-          search: `?talebook=1&mokeBookId=42&file=${encodeURIComponent(blobUrl)}`,
-        },
-        writable: true,
-      });
-      const epubBlob = new Blob(['PK\u0003\u0004epub'], { type: 'application/epub+zip' });
-      const browserFetch = vi
-        .fn()
-        .mockResolvedValue({ ok: true, blob: () => Promise.resolve(epubBlob) });
-      vi.stubGlobal('fetch', browserFetch);
-
-      const result = await parseOpenWithFiles(null);
-
-      expect(browserFetch).toHaveBeenCalledWith(blobUrl, { credentials: 'same-origin' });
-      expect(result).toHaveLength(1);
-      expect(result?.[0]).toBeInstanceOf(File);
-      expect((result?.[0] as File).name).toBe('talebook-42.epub');
-    });
-
-    test('rejects a non-blob URL in Talebook embedded mode', async () => {
-      mockIsWebAppPlatform = true;
-      Object.defineProperty(window, 'location', {
-        value: {
-          ...window.location,
-          origin: 'https://talebook.test',
-          search: '?talebook=1&mokeBookId=42&file=https%3A%2F%2Fevil.test%2Fbook.epub',
-        },
-        writable: true,
-      });
-
-      await expect(parseOpenWithFiles(null)).rejects.toThrow('Talebook embedded file URL');
-    });
   });
 
   // ── Window URL params ──────────────────────────────────────────

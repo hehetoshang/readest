@@ -23,10 +23,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   // replaced at build time, so this early return DCEs the rest of the function
   // out of the Tauri bundle and the route becomes fully static. The web build
   // keeps the full dynamic implementation below.
-  if (
-    process.env['NEXT_PUBLIC_APP_PLATFORM'] !== 'web' ||
-    process.env['NEXT_PUBLIC_TALEBOOK_EMBEDDED'] === 'true'
-  ) {
+  if (process.env['NEXT_PUBLIC_APP_PLATFORM'] !== 'web') {
     return {
       title: 'Open in Readest',
       description: 'Open-source ebook reader for everyone, on every device.',
