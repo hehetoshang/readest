@@ -215,7 +215,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             )}
             <button
               title={_('Go to Library')}
-              className='btn btn-ghost hidden h-8 min-h-8 w-8 p-0 sm:flex'
+              className='btn btn-ghost flex h-8 min-h-8 w-8 p-0'
               onClick={onGoToLibrary}
             >
               <VscLibrary size={iconSize18} className='fill-base-content' />
@@ -307,7 +307,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
               />
             </ModalPortal>
           )}
-          {!(typeof window !== 'undefined' && (window as any).__MOKE_EMBEDDED) && (
+          {!(typeof window !== 'undefined' && window.__MOKE_EMBEDDED) && (
             <WindowButtons
               className='window-buttons flex items-center'
               headerRef={headerRef}

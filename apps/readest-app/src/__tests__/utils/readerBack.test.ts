@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { closeReaderAndNavigateBack } from '@/utils/readerBack';
+import { closeReaderAndNavigateBack, resolveReaderReturnTarget } from '@/utils/readerBack';
 
 describe('closeReaderAndNavigateBack', () => {
   it('waits for progress persistence before navigating back', async () => {
@@ -33,5 +33,24 @@ describe('closeReaderAndNavigateBack', () => {
     ).rejects.toThrow('disk unavailable');
 
     expect(navigateBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resolveReaderReturnTarget', () => {
+  it('returns the Moke library for a book launched directly by Moke', () => {
+    expect(resolveReaderReturnTarget('?moke=1&mokeReturnTo=%2Flibrary')).toEqual({
+      kind: 'moke',
+      path: '/library',
+    });
+  });
+
+  it('returns the Readest library for books opened from its embedded home', () => {
+    expect(resolveReaderReturnTarget('?ids=book-1')).toEqual({ kind: 'readest' });
+  });
+
+  it('does not accept an arbitrary Moke return URL', () => {
+    expect(resolveReaderReturnTarget('?moke=1&mokeReturnTo=https%3A%2F%2Fevil.example')).toEqual({
+      kind: 'readest',
+    });
   });
 });

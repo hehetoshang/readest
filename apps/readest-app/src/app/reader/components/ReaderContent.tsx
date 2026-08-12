@@ -18,6 +18,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { tauriHandleClose, tauriHandleOnCloseWindow } from '@/utils/window';
 import { isTauriAppPlatform } from '@/services/environment';
+import { invoke } from '@tauri-apps/api/core';
 import { uniqueId } from '@/utils/misc';
 import { partialMD5 } from '@/utils/md5';
 import { eventDispatcher } from '@/utils/event';
@@ -32,6 +33,7 @@ import { emitReaderEvent } from '@/services/mokeBridge';
 import { BookDetailModal } from '@/components/metadata';
 import ShareBookDialog from '@/app/library/components/ShareBookDialog';
 import { useAuth } from '@/context/AuthContext';
+import { resolveReaderReturnTarget } from '@/utils/readerBack';
 
 import useBooksManager from '../hooks/useBooksManager';
 import useBookShortcuts from '../hooks/useBookShortcuts';
@@ -358,13 +360,23 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     clearViewState(bookKey);
   };
 
-  const navigateBackToLibrary = () => {
+  const navigateBackToLibrary = async () => {
+    const returnTarget = resolveReaderReturnTarget(window.location.search);
+    if (returnTarget.kind === 'moke') {
+      try {
+        await invoke('moke_navigate', { path: returnTarget.path });
+      } catch (error) {
+        console.warn('moke_navigate failed, falling back to full-document navigation:', error);
+        window.location.assign(returnTarget.path);
+      }
+      return;
+    }
     navigateToLibrary(router, '', undefined, true);
   };
 
   const saveSettingsAndGoToLibrary = () => {
     saveSettings(envConfig, settings);
-    navigateBackToLibrary();
+    void navigateBackToLibrary();
   };
 
   const handleCloseReaderToLibrary = () => {
@@ -393,11 +405,11 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     // SPA navigation in the main window (or on web) keeps the webview alive:
     // TTS may continue headless. Non-main Tauri windows close their webview
     // below, but their per-window TTS dies with the window either way.
-    handleCloseBooks(true);
+    await handleCloseBooks(true);
     if (isTauriAppPlatform()) {
       const currentWindow = getCurrentWindow();
       if (currentWindow.label === 'main') {
-        navigateBackToLibrary();
+        await navigateBackToLibrary();
       } else {
         if (appService) {
           await ensureMainLibraryWindow(appService);
@@ -405,7 +417,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
         currentWindow.close();
       }
     } else {
-      navigateBackToLibrary();
+      await navigateBackToLibrary();
     }
   };
 
