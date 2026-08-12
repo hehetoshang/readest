@@ -7,6 +7,7 @@
  */
 
 import type { Book } from '@/types/book';
+import { mokeProgressStorageKey } from '@/helpers/mokeLaunchContext';
 
 // ---------------------------------------------------------------------------
 // Tauri invoke helper
@@ -103,13 +104,13 @@ export function throttleEntryCount(): number {
 // ---------------------------------------------------------------------------
 
 function isEmbedded(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).__MOKE_EMBEDDED;
+  return typeof window !== 'undefined' && !!window.__MOKE_EMBEDDED;
 }
 
 function withMokeContext(data: Record<string, unknown>): Record<string, unknown> {
   if (typeof window === 'undefined') return data;
 
-  const mokeBookId = (window as any).__MOKE_BOOK_ID;
+  const mokeBookId = window.__MOKE_BOOK_ID;
   if (!mokeBookId || data['moke_book_id']) return data;
 
   return {
@@ -136,6 +137,7 @@ const PROGRESS_SAVE_DEBOUNCE_MS = 1200;
 
 let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingProgress: Record<string, unknown> | null = null;
+let progressFlushListenersRegistered = false;
 
 function progressStringValue(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
@@ -149,8 +151,8 @@ function progressNumberValue(value: unknown): number | undefined {
 }
 
 async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<void> {
-  const serverUrl = (window as any).__MOKE_SERVER_URL;
-  const mokeBookId = (window as any).__MOKE_BOOK_ID;
+  const serverUrl = window.__MOKE_SERVER_URL;
+  const mokeBookId = window.__MOKE_BOOK_ID;
   if (typeof serverUrl !== 'string' || !serverUrl || !mokeBookId) return;
 
   const payload = {
@@ -185,7 +187,38 @@ async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<
   }
 }
 
+function saveProgressToLocalStorage(data: Record<string, unknown>): void {
+  const mokeBookId = window.__MOKE_BOOK_ID;
+  if (!mokeBookId) return;
+  const serverUrl = typeof window.__MOKE_SERVER_URL === 'string' ? window.__MOKE_SERVER_URL : '';
+  const payload = {
+    schema: 'moke.readest.progress.v1',
+    reader: 'readest',
+    moke_book_id: String(mokeBookId),
+    reader_book_id: progressStringValue(data['book_id']),
+    view_key: progressStringValue(data['view_key']),
+    location: progressStringValue(data['location']),
+    section_href: progressStringValue(data['section_href']),
+    chapter: progressStringValue(data['chapter']),
+    page: progressNumberValue(data['page']),
+    total_pages: progressNumberValue(data['total_pages']),
+    progress: progressNumberValue(data['progress']),
+    fraction: progressNumberValue(data['fraction']),
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    window.localStorage.setItem(
+      mokeProgressStorageKey(serverUrl, String(mokeBookId)),
+      JSON.stringify(payload),
+    );
+  } catch {
+    // Local storage is best-effort (some ArkWeb custom-scheme contexts deny it).
+  }
+}
+
 function scheduleProgressSave(data: Record<string, unknown>): void {
+  ensureProgressFlushListeners();
   pendingProgress = data;
   if (progressSaveTimer) clearTimeout(progressSaveTimer);
   progressSaveTimer = setTimeout(() => {
@@ -207,6 +240,22 @@ function flushProgressSave(): Promise<void> {
   return saveProgressToMokeServer(latest);
 }
 
+function ensureProgressFlushListeners(): void {
+  if (typeof window === 'undefined' || progressFlushListenersRegistered) return;
+  progressFlushListenersRegistered = true;
+
+  // System back gestures, app backgrounding, and OS process reclamation can
+  // unload the single mobile WebView without emitting book:closed. Start the
+  // pending direct save as soon as the page is hidden instead of waiting for
+  // the debounce timer that will be destroyed with the page.
+  window.addEventListener('pagehide', () => {
+    void flushProgressSave();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void flushProgressSave();
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -223,8 +272,14 @@ const THROTTLED_EVENTS = new Set(['page:changed']);
 export function emitReaderEvent(event: string, data: Record<string, unknown>): Promise<void> {
   if (!isEmbedded()) return Promise.resolve();
 
+  // Synchronous local snapshot: survives system-back/page teardown and is the
+  // primary persistence path for users who are not signed in.
+  if (event === 'page:changed') {
+    saveProgressToLocalStorage(data);
+  }
+
   // 单 WebView 运行时宿主应用已被卸载，这里由阅读器直接保存进度。
-  if (event === 'page:changed' && typeof (window as any).__MOKE_SERVER_URL === 'string') {
+  if (event === 'page:changed' && typeof window.__MOKE_SERVER_URL === 'string') {
     scheduleProgressSave(data);
   }
 

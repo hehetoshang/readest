@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { Metadata, Viewport } from 'next';
+import { bootstrapMokeLaunchContext } from '@/helpers/mokeLaunchContext';
 import Script from 'next/script';
 import { ViewTransitions } from 'next-view-transitions';
 import { EnvProvider } from '@/context/EnvContext';
@@ -136,21 +137,7 @@ const shouldInjectRuntimeConfig = process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'w
 // Mobile Moke opens the embedded reader in its only WebView. Bootstrap the
 // host context before React starts so the reader handles the file, e-ink mode,
 // and progress bridge exactly like its desktop reader window.
-const mokeLaunchContextScript = `(() => {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('moke') !== '1') return;
-  window.__MOKE_EMBEDDED = true;
-  window.__MOKE_EINK = params.get('mokeEink') === '1';
-  window.__MOKE_BOOK_ID = params.get('mokeBookId') || null;
-  window.__MOKE_SERVER_URL = params.get('mokeServerUrl') || null;
-  const progress = params.get('mokeRestoreProgress');
-  if (!progress) return;
-  try {
-    window.__MOKE_RESTORE_PROGRESS = JSON.parse(progress);
-  } catch {
-    window.__MOKE_RESTORE_PROGRESS = null;
-  }
-})();`;
+const mokeLaunchContextScript = `(${bootstrapMokeLaunchContext.toString()})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

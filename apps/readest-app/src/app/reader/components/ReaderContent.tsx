@@ -18,7 +18,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { tauriHandleClose, tauriHandleOnCloseWindow } from '@/utils/window';
 import { isTauriAppPlatform } from '@/services/environment';
-import { throttle } from '@/utils/throttle';
 import { uniqueId } from '@/utils/misc';
 import { partialMD5 } from '@/utils/md5';
 import { eventDispatcher } from '@/utils/event';
@@ -71,6 +70,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   const { user } = useAuth();
   const isInitiating = useRef(false);
   const hasHandledOpenFiles = useRef(false);
+  const closingBooksRef = useRef<{ bookKeys: string; promise: Promise<void> } | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorLoading, setErrorLoading] = useState(false);
 
@@ -373,13 +373,21 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
 
   // Also wired directly to beforeunload/quit-app/window-close, which pass an
   // event object: only a literal `true` keeps TTS alive.
-  const handleCloseBooks = throttle(async (keepTTSAlive?: unknown) => {
-    const settings = useSettingsStore.getState().settings;
-    await Promise.all(
-      bookKeys.map(async (key) => await saveConfigAndCloseBook(key, keepTTSAlive === true)),
-    );
-    await saveSettings(envConfig, settings);
-  }, 200);
+  const handleCloseBooks = (keepTTSAlive?: unknown): Promise<void> => {
+    const key = bookKeys.join(BOOK_IDS_SEPARATOR);
+    const activeClose = closingBooksRef.current;
+    if (activeClose?.bookKeys === key) return activeClose.promise;
+
+    const promise = (async () => {
+      const settings = useSettingsStore.getState().settings;
+      await Promise.all(
+        bookKeys.map(async (bookKey) => saveConfigAndCloseBook(bookKey, keepTTSAlive === true)),
+      );
+      await saveSettings(envConfig, settings);
+    })();
+    closingBooksRef.current = { bookKeys: key, promise };
+    return promise;
+  };
 
   const handleCloseBooksToLibrary = async () => {
     // SPA navigation in the main window (or on web) keeps the webview alive:

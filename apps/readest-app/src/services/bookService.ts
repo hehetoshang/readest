@@ -587,9 +587,13 @@ export async function importBook(
     const coverHash = await computeCoverHash(fs, book);
     book.coverHash = coverHash;
     if (existingBook) existingBook.coverHash = coverHash;
-    // Never overwrite the config file only when it's not existed
+    // A transient Moke/open-with book is re-created in memory on every launch,
+    // but its hash-based config directory survives. Preserve that config so
+    // reopening the same local file restores its last reading location.
     if (!existingBook) {
-      await saveBookConfigFn(book, INIT_BOOK_CONFIG);
+      if (!(await fs.exists(getConfigFilename(book), 'Books'))) {
+        await saveBookConfigFn(book, INIT_BOOK_CONFIG);
+      }
       books.push(book);
       if (lookupIndex) {
         lookupIndex.byHash.set(book.hash, book);

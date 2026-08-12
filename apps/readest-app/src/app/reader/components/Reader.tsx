@@ -29,6 +29,7 @@ import { ProofreadRulesManager } from './ProofreadRules';
 import { Toast } from '@/components/Toast';
 import { getLocale } from '@/utils/misc';
 import { initDayjs } from '@/utils/time';
+import { closeReaderAndNavigateBack } from '@/utils/readerBack';
 import ReaderContent from './ReaderContent';
 
 /*
@@ -98,8 +99,10 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
       } else if (getIsNotebookVisible() && !isNotebookPinned) {
         setNotebookVisible(false);
       } else {
-        eventDispatcher.dispatch('close-reader');
-        router.back();
+        void closeReaderAndNavigateBack(
+          () => eventDispatcher.dispatch('close-reader'),
+          () => router.back(),
+        );
       }
       return true;
     }

@@ -17,6 +17,7 @@ describe('mokeBridge server-side progress persistence', () => {
     window.__MOKE_EMBEDDED = true;
     window.__MOKE_SERVER_URL = SERVER_URL;
     window.__MOKE_BOOK_ID = '42';
+    localStorage.clear();
     vi.useFakeTimers();
   });
 
@@ -76,6 +77,26 @@ describe('mokeBridge server-side progress persistence', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('saves a local progress snapshot immediately even without a login/server URL', () => {
+    window.__MOKE_SERVER_URL = null;
+
+    void emitReaderEvent('page:changed', {
+      book_id: 'abc123',
+      location: 'epubcfi(/6/5)',
+      page: 5,
+      fraction: 0.05,
+    });
+
+    const stored = Array.from({ length: localStorage.length }, (_, index) =>
+      localStorage.key(index),
+    ).find((key) => key?.startsWith('moke:reading-progress:'));
+    expect(stored).toBeTruthy();
+    const progress = JSON.parse(localStorage.getItem(stored!)!);
+    expect(progress.moke_book_id).toBe('42');
+    expect(progress.location).toBe('epubcfi(/6/5)');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('debounces rapid page turns and saves only the latest location', async () => {
     void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'epubcfi(/6/1)', page: 1 });
     await vi.advanceTimersByTimeAsync(400);
@@ -106,5 +127,18 @@ describe('mokeBridge server-side progress persistence', () => {
     const call = fetchMock.mock.calls[0]!;
     const url = call[0];
     expect(url).toBe(`${SERVER_URL}/api/book/42/progress`);
+  });
+  it('flushes pending progress when the reader page is hidden', async () => {
+    void emitReaderEvent('page:changed', {
+      book_id: 'abc123',
+      location: 'epubcfi(/6/10)',
+      page: 10,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -275,6 +275,24 @@ describe('importBook metaHash deduplication', () => {
     expect(result).not.toBe(existingBook);
   });
 
+  it('preserves an existing local config when reopening a transient book', async () => {
+    const books: Book[] = [];
+
+    mockPartialMD5.mockResolvedValue('transient-hash');
+    setupMockBookDoc();
+
+    const fs = service.getFs();
+    fs.openFile.mockResolvedValue(new File(['content'], 'test.epub'));
+    fs.exists.mockImplementation(async (path: string) => path === 'transient-hash/config.json');
+
+    await service.importBook('/path/to/test.epub', books, { transient: true });
+
+    const configWrites = fs.writeFile.mock.calls.filter(
+      (call: unknown[]) => call[0] === 'transient-hash/config.json',
+    );
+    expect(configWrites).toHaveLength(0);
+  });
+
   it('should promote extracted ISBN into metadata.isbn during import', async () => {
     const books: Book[] = [];
 
