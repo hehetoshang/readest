@@ -72,6 +72,17 @@ const nextConfig = {
     ignoreDuringBuilds: exportOutput,
   },
   experimental: {
+    // The Talebook export previously forced 16 workers and used Turbopack's
+    // child-process plugin runtime. On constrained hosts that could leave
+    // hundreds of `next build`/PostCSS processes behind. Keep this opt-in
+    // profile bounded and use threads whose lifetime follows the parent build.
+    ...(talebookExport
+      ? {
+          cpus: 2,
+          workerThreads: true,
+          memoryBasedWorkersCount: false,
+        }
+      : {}),
     turbopackFileSystemCacheForDev: true,
     turbopackFileSystemCacheForBuild: true,
     turbopackMemoryLimit: 8192, // MB — use more RAM for fewer GC pauses
