@@ -17,7 +17,9 @@ if (isDev) {
 // assets are served under a distinct prefix (e.g. /readest/) and don't
 // collide with the host's own /_next/static/... assets.
 const embeddedBasePath = process.env['NEXT_PUBLIC_EMBEDDED_BASE_PATH'];
-const exportOutput = appPlatform !== 'web' && !isDev;
+const embeddedProfile = process.env['NEXT_PUBLIC_READEST_PROFILE'];
+const talebookExport = embeddedProfile === 'talebook' && !isDev;
+const exportOutput = (appPlatform !== 'web' || talebookExport) && !isDev;
 // Opt-in standalone output, set only by the Docker production build
 // (Dockerfile). Every other path keeps the original behavior: Tauri `export`,
 // local `build-web` (output undefined), dev, and the Cloudflare/OpenNext
@@ -34,11 +36,11 @@ const nextConfig = {
   output: exportOutput ? 'export' : standaloneOutput ? 'standalone' : undefined,
   // When building for Tauri (exportOutput), output directly into the parent
   // project's out/readest/ so a single frontendDist="../out" covers both apps.
-  distDir: exportOutput ? '../../out/readest' : '.next',
+  distDir: talebookExport ? '../../out/talebook-reader' : exportOutput ? '../../out/readest' : '.next',
   // Serve all readest pages under /readest/* when embedded in the parent app.
   // In standalone/dev mode we omit basePath to keep the original behaviour,
   // unless an embedded host overrides it via NEXT_PUBLIC_EMBEDDED_BASE_PATH.
-  basePath: exportOutput ? '/readest' : (embeddedBasePath || ''),
+  basePath: exportOutput ? (embeddedBasePath || '/readest') : (embeddedBasePath || ''),
   // Emit browser source maps for the Tauri export build so Sentry can
   // symbolicate crashes. `scripts/upload-sourcemaps.mjs` uploads them after the
   // build and strips the .map files, so they never ship inside the app bundle.
@@ -46,7 +48,11 @@ const nextConfig = {
   // Monorepo: trace from the repo root so workspace packages land in the
   // standalone tree. Only relevant to — and only set for — the Docker build.
   outputFileTracingRoot: standaloneOutput ? path.join(__dirname, '../../') : undefined,
-  pageExtensions: exportOutput ? ['jsx', 'tsx'] : ['js', 'jsx', 'ts', 'tsx'],
+  pageExtensions: talebookExport
+    ? ['talebook.tsx']
+    : exportOutput
+      ? ['jsx', 'tsx']
+      : ['js', 'jsx', 'ts', 'tsx'],
   // Note: This feature is required to use the Next.js Image component in SSG mode.
   // See https://nextjs.org/docs/messages/export-image-api for different workarounds.
   images: {

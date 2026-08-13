@@ -9,7 +9,9 @@ const SUPPORTED_LNGS = ['en', ...translatableLngs];
 const isBrowser = typeof window !== 'undefined';
 // Moke ships Readest beneath `/readest`; i18next's absolute URL would
 // otherwise escape that prefix and request the host app's nonexistent locales.
-const publicBasePath = process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'tauri' ? '/readest' : '';
+const publicBasePath =
+  process.env['NEXT_PUBLIC_EMBEDDED_BASE_PATH'] ||
+  (process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'tauri' ? '/readest' : '');
 
 const initI18n = async () => {
   if (isBrowser) {

@@ -84,10 +84,11 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     if (isInitiating.current) return;
     isInitiating.current = true;
 
-    const pathname = window.location.pathname;
-    const bookIds = ids || searchParams?.get('ids') || pathname.split('/reader/')[1] || '';
-    const initialIds = bookIds.split(BOOK_IDS_SEPARATOR).filter(Boolean);
     const mokeFiles = getMokeEmbeddedFiles();
+    const pathname = window.location.pathname;
+    const pathIds = mokeFiles.length ? '' : pathname.split('/reader/')[1] || '';
+    const bookIds = ids || searchParams?.get('ids') || pathIds;
+    const initialIds = bookIds.split(BOOK_IDS_SEPARATOR).filter(Boolean);
 
     // No ids provided — check if the window was opened with a file path,
     // either from the desktop window bootstrap or Moke mobile's URL.
