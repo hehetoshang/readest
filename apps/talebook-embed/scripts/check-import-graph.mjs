@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 const sourceRoot = path.join(root, 'src');
-const forbidden = /(?:^|[/\\])(?:library|account|auth|cloud|replica|sync|payment|upgrade|updater|send|rss|opds|integrations?|telemetry|assistant|reedy|gateway|src-tauri)(?:[/\\]|\.|$)|@tauri-apps|posthog|supabase|stripe|@aws-sdk|@ai-sdk|assistant-ui/i;
+const forbidden = /(?:^|[/\\])(?:library|account|auth|cloud|replica|sync|payment|upgrade|updater|send|rss|opds|integrations?|telemetry|assistant|reedy|gateway|tts|translation|dictionaries?|src-tauri)(?:[/\\]|\.|$)|@tauri-apps|posthog|supabase|stripe|@aws-sdk|@ai-sdk|assistant-ui/i;
 const importPattern = /(?:import|export)\s+(?:[^'";]+?\s+from\s+)?['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g;
 const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '.css'];
 const queue = [path.join(sourceRoot, 'main.tsx')];

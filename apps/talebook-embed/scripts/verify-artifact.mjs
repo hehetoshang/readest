@@ -10,7 +10,6 @@ const dist = path.join(root, 'dist');
 const files = fs.readdirSync(dist, { recursive: true }).filter((name) => fs.statSync(path.join(dist, name)).isFile()).sort();
 const allowed = /^(?:index\.html|\.vite\/manifest\.json|assets\/[A-Za-z0-9_.-]+\.(?:js|css))$/;
 const forbiddenText = /(?:https?:\/\/[^\s"']*readest\.com|supabase\.co|js\.stripe\.com|app\.posthog\.com|@tauri-apps|\/api\/(?:auth|sync|send)(?:\/|["']))/i;
-const forbiddenSource = /(?:^|[/\\])(?:library|account|auth|cloud|replica|sync|payment|upgrade|updater|send|rss|opds|integrations?|telemetry|assistant|reedy|gateway|src-tauri)(?:[/\\]|\.|$)|@tauri-apps|posthog|supabase|stripe|@aws-sdk|@ai-sdk|assistant-ui/i;
 const badRoute = files.find((name) => !allowed.test(name));
 if (badRoute) throw new Error(`Unexpected talebook-embed artifact: ${badRoute}`);
 

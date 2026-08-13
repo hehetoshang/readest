@@ -1,9 +1,23 @@
 import { BlobReader, BlobWriter, TextWriter, ZipReader, configure } from '@zip.js/zip.js';
 import { EPUB } from 'foliate-js/epub.js';
 
+export class EpubResourceError extends Error {
+  constructor(
+    readonly code: 'resource-changed' | 'resource-failed',
+    status: number,
+  ) {
+    super(`EPUB resource failed (${status})`);
+  }
+}
+
 export async function openEpub(url: string) {
   const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
-  if (!response.ok) throw new Error(`EPUB resource failed (${response.status})`);
+  if (!response.ok) {
+    throw new EpubResourceError(
+      response.status === 409 ? 'resource-changed' : 'resource-failed',
+      response.status,
+    );
+  }
   const mime = response.headers.get('content-type')?.split(';', 1)[0];
   if (mime !== 'application/epub+zip')
     throw new Error(`Unexpected EPUB MIME type: ${mime ?? 'missing'}`);
@@ -23,6 +37,8 @@ export async function openEpub(url: string) {
       return entry && 'getData' in entry ? entry.getData(new BlobWriter(type)) : null;
     },
     getSize: (name: string) => byName.get(name)?.uncompressedSize ?? 0,
+    sha1: undefined,
+    destroy: () => reader.close(),
   };
   return new EPUB(loader).init();
 }
