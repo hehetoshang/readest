@@ -36,7 +36,7 @@ const nextConfig = {
   output: exportOutput ? 'export' : standaloneOutput ? 'standalone' : undefined,
   // When building for Tauri (exportOutput), output directly into the parent
   // project's out/readest/ so a single frontendDist="../out" covers both apps.
-  distDir: talebookExport ? '../../out/talebook-reader' : exportOutput ? '../../out/readest' : '.next',
+  distDir: exportOutput ? '../../out/readest' : '.next',
   // Serve all readest pages under /readest/* when embedded in the parent app.
   // In standalone/dev mode we omit basePath to keep the original behaviour,
   // unless an embedded host overrides it via NEXT_PUBLIC_EMBEDDED_BASE_PATH.
