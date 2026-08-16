@@ -5,6 +5,17 @@ const unwrapCfi = (cfi: string): string => {
   return match ? match[1]! : cfi;
 };
 
+/** Sort positioned annotations first while keeping chapter-only records stable. */
+export function compareOptionalCfi(
+  a: { cfi: string; createdAt: number },
+  b: { cfi: string; createdAt: number },
+): number {
+  if (a.cfi && b.cfi) return CFI.compare(a.cfi, b.cfi);
+  if (a.cfi) return -1;
+  if (b.cfi) return 1;
+  return a.createdAt - b.createdAt;
+}
+
 export function isCfiInLocation(cfi: string, location: string | null | undefined): boolean {
   if (!cfi || !location) return false;
   if (cfi === location) return true;

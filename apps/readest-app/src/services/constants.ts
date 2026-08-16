@@ -24,6 +24,7 @@ import {
   LibrarySortByType,
   ReadSettings,
   ReadwiseSettings,
+  TalebookSettings,
   SystemSettings,
   WebDAVSettings,
   GoogleDriveSettings,
@@ -85,6 +86,18 @@ export const DEFAULT_READWISE_SETTINGS = {
   accessToken: '',
   lastSyncedAt: 0,
 } as ReadwiseSettings;
+
+export const DEFAULT_TALEBOOK_SETTINGS = {
+  enabled: false,
+  serverUrl: '',
+  username: '',
+  accessToken: '',
+  connectionId: '',
+  autoSync: true,
+  privateByDefault: true,
+  lastSyncedAt: 0,
+  bookIds: {},
+} as TalebookSettings;
 
 export const DEFAULT_HARDCOVER_SETTINGS = {
   enabled: false,
@@ -195,6 +208,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   },
 
   kosync: DEFAULT_KOSYNC_SETTINGS,
+  talebook: DEFAULT_TALEBOOK_SETTINGS,
   readwise: DEFAULT_READWISE_SETTINGS,
   hardcover: DEFAULT_HARDCOVER_SETTINGS,
   webdav: DEFAULT_WEBDAV_SETTINGS,

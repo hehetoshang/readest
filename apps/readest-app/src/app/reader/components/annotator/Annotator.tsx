@@ -25,6 +25,7 @@ import { useFoliateEvents } from '../../hooks/useFoliateEvents';
 import { useRendererInputListeners } from '../../hooks/useRendererInputListeners';
 import { useNotesSync } from '../../hooks/useNotesSync';
 import { useReadwiseSync } from '../../hooks/useReadwiseSync';
+import { useTalebookSync } from '../../hooks/useTalebookSync';
 import { useHardcoverSync } from '../../hooks/useHardcoverSync';
 import { useTextSelector } from '../../hooks/useTextSelector';
 import { Point, Position, TextSelection } from '@/utils/sel';
@@ -48,7 +49,7 @@ import {
 import { Insets } from '@/types/misc';
 import { runSimpleCC } from '@/utils/simplecc';
 import { getWordCount } from '@/utils/word';
-import { getIndexFromCfi } from '@/utils/cfi';
+import { compareOptionalCfi, getIndexFromCfi } from '@/utils/cfi';
 import { writeTextToClipboard } from '@/utils/clipboard';
 import { canShareText, shareSelectedText } from '@/utils/share';
 import { getToolbarToolTypes } from '@/utils/annotationToolbar';
@@ -119,6 +120,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
   const { selectFiles } = useFileSelector(appService, _);
 
   useNotesSync(bookKey);
+  useTalebookSync(bookKey);
   useReadwiseSync(bookKey);
   useHardcoverSync(bookKey);
 
@@ -1559,10 +1561,11 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     // Organize booknotes into groups by chapter
     const booknoteGroups: { [href: string]: BooknoteGroup } = {};
     for (const booknote of booknotes) {
-      const tocItem = findTocItemBS(bookDoc.toc ?? [], booknote.cfi);
-      const href = tocItem?.href || '';
-      const label = tocItem?.label || '';
-      const id = tocItem?.id || 0;
+      const tocItem = booknote.cfi ? findTocItemBS(bookDoc.toc ?? [], booknote.cfi) : undefined;
+      const fallbackChapter = booknote.source?.chapter || _('Unknown chapter');
+      const href = tocItem?.href || `external:${fallbackChapter}`;
+      const label = tocItem?.label || fallbackChapter;
+      const id = tocItem?.id ?? Number.MAX_SAFE_INTEGER;
       if (!booknoteGroups[href]) {
         booknoteGroups[href] = { id, href, label, booknotes: [] };
       }
@@ -1570,9 +1573,7 @@ const Annotator: React.FC<{ bookKey: string; contentInsets: Insets }> = ({
     }
 
     Object.values(booknoteGroups).forEach((group) => {
-      group.booknotes.sort((a, b) => {
-        return CFI.compare(a.cfi, b.cfi);
-      });
+      group.booknotes.sort(compareOptionalCfi);
     });
 
     setExportData({ booknoteGroups });

@@ -41,6 +41,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, isNearest, o
   const customColors = globalReadSettings.customHighlightColors;
 
   const { text, cfi, note } = item;
+  const isReadOnly = item.source?.readOnly === true;
   const editorRef = useRef<TextEditorRef>(null);
   const [editorDraft, setEditorDraft] = useState(text || '');
   const [inlineEditMode, setInlineEditMode] = useState(false);
@@ -53,7 +54,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, isNearest, o
   // scrolling via virtuosoRef.scrollToIndex, avoiding N getBoundingClientRect
   // calls when the list grows large.
   const isCurrent = useMemo(
-    () => isCfiInLocation(cfi, progress?.location) || !!isNearest,
+    () => (!!cfi && isCfiInLocation(cfi, progress?.location)) || !!isNearest,
     [cfi, progress?.location, isNearest],
   );
 
@@ -67,10 +68,20 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, isNearest, o
 
   const handleClickItem = (event: React.MouseEvent | React.KeyboardEvent) => {
     event.preventDefault();
-    eventDispatcher.dispatch('navigate', { bookKey, cfi });
-
     onClick?.();
-    getView(bookKey)?.goTo(cfi);
+    if (cfi) {
+      eventDispatcher.dispatch('navigate', { bookKey, cfi });
+      getView(bookKey)?.goTo(cfi);
+    } else {
+      eventDispatcher.dispatch('toast', {
+        type: 'info',
+        message: item.source?.chapter
+          ? _('Exact location unavailable. Showing chapter {{chapter}}.', {
+              chapter: item.source.chapter,
+            })
+          : _('Exact location is unavailable for this external note.'),
+      });
+    }
     if (note) {
       setNotebookVisible(true);
     }
@@ -174,7 +185,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, isNearest, o
     );
   }
 
-  const isEditable = item.note || item.type === 'bookmark';
+  const isEditable = !isReadOnly && (item.note || item.type === 'bookmark');
 
   return (
     <li
@@ -207,6 +218,22 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, isNearest, o
           } as React.CSSProperties
         }
       >
+        {item.source && (
+          <div className='mb-2 flex flex-wrap items-center gap-1.5 text-xs'>
+            <span className='eink-bordered border-base-300 bg-base-200 rounded border px-1.5 py-0.5 font-medium'>
+              {item.source.displayName || item.source.name}
+            </span>
+            {item.source.chapter && (
+              <span className='text-base-content/65 truncate'>{item.source.chapter}</span>
+            )}
+            {item.source.degraded && (
+              <span className='text-warning font-medium'>{_('Chapter location only')}</span>
+            )}
+            {item.source.syncStatus === 'failed' && (
+              <span className='text-error font-medium'>{_('Sync failed')}</span>
+            )}
+          </div>
+        )}
         {item.note && (
           <div
             className='content prose prose-sm font-size-sm'
@@ -295,13 +322,15 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, isNearest, o
               <MdContentCopy size={size18} />
             </button>
 
-            <button
-              onClick={deleteNote.bind(null, item)}
-              className='btn btn-ghost btn-xs p-0 text-red-500 opacity-0 transition duration-300 ease-in-out hover:bg-transparent group-focus-within:opacity-100 group-hover:opacity-100'
-              aria-label={_('Delete')}
-            >
-              <MdDelete size={size18} />
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={deleteNote.bind(null, item)}
+                className='btn btn-ghost btn-xs p-0 text-red-500 opacity-0 transition duration-300 ease-in-out hover:bg-transparent group-focus-within:opacity-100 group-hover:opacity-100'
+                aria-label={_('Delete')}
+              >
+                <MdDelete size={size18} />
+              </button>
+            )}
 
             {isEditable && (
               <button

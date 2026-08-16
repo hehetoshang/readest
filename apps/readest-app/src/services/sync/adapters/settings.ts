@@ -59,6 +59,11 @@ export const SETTINGS_WHITELIST = [
   'kosync.password',
   'readwise.baseUrl',
   'readwise.accessToken',
+  'talebook.serverUrl',
+  'talebook.username',
+  'talebook.accessToken',
+  'talebook.connectionId',
+  'talebook.bookIds',
   'hardcover.accessToken',
   // WebDAV connection. serverUrl + rootPath sync as plaintext so a fresh
   // device pre-fills the connect form; username / password are listed in
@@ -99,6 +104,8 @@ export const SETTINGS_ENCRYPTED_FIELDS = [
   'kosync.userkey',
   'kosync.password',
   'readwise.accessToken',
+  'talebook.username',
+  'talebook.accessToken',
   'hardcover.accessToken',
   'webdav.username',
   'webdav.password',

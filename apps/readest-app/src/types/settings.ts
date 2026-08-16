@@ -96,6 +96,21 @@ export interface ReadwiseSettings {
   baseUrl?: string;
 }
 
+export interface TalebookSettings {
+  enabled: boolean;
+  serverUrl: string;
+  username: string;
+  /** Password or app token accepted by Talebook's HTTP Basic authentication. */
+  accessToken: string;
+  /** Stable Readest installation identity used in source_connection_id. */
+  connectionId: string;
+  autoSync: boolean;
+  privateByDefault: boolean;
+  lastSyncedAt: number;
+  /** Readest book hash -> Talebook numeric book id. */
+  bookIds: Record<string, number>;
+}
+
 export interface HardcoverSettings {
   enabled: boolean;
   accessToken: string;
@@ -414,6 +429,7 @@ export interface SystemSettings {
   biometricUnlockEnabled?: boolean;
 
   kosync: KOSyncSettings;
+  talebook: TalebookSettings;
   readwise: ReadwiseSettings;
   hardcover: HardcoverSettings;
   /** Optional by design — see {@link ReadestCloudSettings}. Never defaulted. */

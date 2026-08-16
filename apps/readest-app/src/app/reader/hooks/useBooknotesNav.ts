@@ -1,10 +1,9 @@
 import { useCallback, useMemo } from 'react';
-import * as CFI from 'foliate-js/epubcfi.js';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useBookProgress } from '@/store/readerProgressStore';
 import { useBookDataStore } from '@/store/bookDataStore';
-import { createCfiLocationMatcher } from '@/utils/cfi';
+import { compareOptionalCfi, createCfiLocationMatcher } from '@/utils/cfi';
 import { findTocItemBS } from '@/services/nav';
 import { BookNoteType } from '@/types/book';
 import { TOCItem } from '@/libs/document';
@@ -38,7 +37,7 @@ export function useBooknotesNav(bookKey: string, toc: TOCItem[]) {
   // Sort booknotes by CFI order
   const sortedBooknotes = useMemo(() => {
     if (!booknoteResults) return [];
-    return [...booknoteResults].sort((a, b) => CFI.compare(a.cfi, b.cfi));
+    return [...booknoteResults].sort(compareOptionalCfi);
   }, [booknoteResults]);
 
   const totalResults = sortedBooknotes.length;
@@ -87,7 +86,7 @@ export function useBooknotesNav(bookKey: string, toc: TOCItem[]) {
       if (index < 0 || index >= sortedBooknotes.length) return;
 
       const note = sortedBooknotes[index];
-      if (note) {
+      if (note?.cfi) {
         setBooknoteIndex(bookKey, index);
         getView(bookKey)?.goTo(note.cfi);
       }
@@ -101,13 +100,13 @@ export function useBooknotesNav(bookKey: string, toc: TOCItem[]) {
       const filtered = allBooknotes.filter((note) => note.type === type);
       if (filtered.length === 0) return;
 
-      const sorted = [...filtered].sort((a, b) => CFI.compare(a.cfi, b.cfi));
+      const sorted = [...filtered].sort(compareOptionalCfi);
       setActiveBooknoteType(bookKey, type);
       setBooknoteResults(bookKey, sorted);
       setBooknoteIndex(bookKey, 0);
 
       // Navigate to first booknote
-      if (sorted.length > 0) {
+      if (sorted[0]?.cfi) {
         getView(bookKey)?.goTo(sorted[0]!.cfi);
       }
     },

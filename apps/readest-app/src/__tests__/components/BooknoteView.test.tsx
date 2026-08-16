@@ -147,6 +147,17 @@ afterEach(() => {
 });
 
 describe('BooknoteView — OverlayScrollbars init does not rewind the list to the top', () => {
+  it('keeps a chapter-only external note in the list without parsing an empty CFI', () => {
+    mockBooknotes = [
+      {
+        ...makeNote(''),
+        source: { name: 'weread', chapter: 'Chapter 3', degraded: true, readOnly: true },
+      },
+    ];
+
+    expect(() => render(<BooknoteView type='annotation' bookKey='book1' toc={[]} />)).not.toThrow();
+  });
+
   it('re-applies the auto-scroll to the nearest note when OverlayScrollbars initializes after the reading position arrives', () => {
     // Fresh open: BooknoteView mounts before the first relocate, so `progress`
     // (and thus the nearest cfi) has no reading position yet.
