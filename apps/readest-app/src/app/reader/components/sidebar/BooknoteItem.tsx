@@ -3,7 +3,6 @@ import dayjs from 'dayjs';
 import React, { useMemo, useRef, useState } from 'react';
 import { MdEdit, MdDelete, MdContentCopy } from 'react-icons/md';
 
-import { marked } from 'marked';
 import { useEnv } from '@/context/EnvContext';
 import { BookNote, HighlightColor } from '@/types/book';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -16,6 +15,7 @@ import { eventDispatcher } from '@/utils/event';
 import { isCfiInLocation } from '@/utils/cfi';
 import { buildAnnotationUrl } from '@/utils/deeplink';
 import { buildAnnotationCopyMarkdown } from '@/utils/note';
+import { renderBookNoteHtml } from '@/utils/booknote';
 import { writeTextToClipboard } from '@/utils/clipboard';
 import { DEFAULT_NOTE_EXPORT_CONFIG } from '@/services/constants';
 import { removeBookNoteOverlays } from '../../utils/annotatorUtil';
@@ -61,7 +61,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({ bookKey, item, isNearest, o
   // marked.parse is heavy when called on every list scroll re-render across
   // hundreds of items. Cache by note text — note edits change item.note and
   // bust the cache automatically.
-  const noteHtml = useMemo(() => (note ? marked.parse(note) : ''), [note]);
+  const noteHtml = useMemo(() => renderBookNoteHtml(note), [note]);
 
   // dayjs().fromNow() reformats every render; cache per createdAt.
   const createdAtLabel = useMemo(() => dayjs(item.createdAt).fromNow(), [item.createdAt]);

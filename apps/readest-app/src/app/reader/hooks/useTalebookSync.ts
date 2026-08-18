@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import {
   TalebookAnnotationClient,
   TalebookSyncError,
+  mergeTalebookSyncResult,
   resolveTalebookBookId,
   syncTalebookBookNotes,
 } from '@/services/talebook';
@@ -57,23 +58,30 @@ export const useTalebookSync = (bookKey: string) => {
 
       syncingRef.current = true;
       try {
+        const notesAtStart = (config.booknotes ?? []).map((note) => ({
+          ...note,
+          source: note.source ? { ...note.source } : undefined,
+        }));
         const client = new TalebookAnnotationClient(talebook);
-        const result = await syncTalebookBookNotes(
-          client,
-          bookId,
-          config.booknotes ?? [],
-          talebook,
+        const result = await syncTalebookBookNotes(client, bookId, notesAtStart, talebook);
+        const liveConfig = useBookDataStore.getState().booksData[bookHash]?.config;
+        const reconciledNotes = mergeTalebookSyncResult(
+          notesAtStart,
+          liveConfig?.booknotes ?? [],
+          result.booknotes,
         );
-        const updatedConfig = updateBooknotes(bookKey, result.booknotes);
+        const updatedConfig = updateBooknotes(bookKey, reconciledNotes);
         if (updatedConfig) {
           lastAppliedNotesRef.current = updatedConfig.booknotes;
-          await saveConfig(envConfig, bookKey, updatedConfig, settings);
+          const liveSettings = useSettingsStore.getState().settings;
+          await saveConfig(envConfig, bookKey, updatedConfig, liveSettings);
         }
 
         const syncedAt = Date.now();
+        const liveSettings = useSettingsStore.getState().settings;
         const nextSettings = {
-          ...settings,
-          talebook: { ...talebook, lastSyncedAt: syncedAt },
+          ...liveSettings,
+          talebook: { ...liveSettings.talebook, lastSyncedAt: syncedAt },
         };
         setSettings(nextSettings);
         await saveSettings(envConfig, nextSettings);

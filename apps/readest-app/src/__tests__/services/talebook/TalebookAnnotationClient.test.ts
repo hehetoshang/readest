@@ -4,7 +4,9 @@ import type { TalebookSettings } from '@/types/settings';
 import {
   TALEBOOK_ANNOTATION_CONTRACT,
   TalebookAnnotationClient,
+  bookNoteToTalebookInput,
   mergeTalebookAnnotations,
+  mergeTalebookSyncResult,
   resolveTalebookBookId,
   syncTalebookBookNotes,
   type TalebookAnnotation,
@@ -171,6 +173,7 @@ describe('Talebook annotation mapping and sync', () => {
     const saved = annotation({
       client_id: 'local-note-1',
       cfi: local.cfi,
+      chapter: '',
       quote_text: local.text!,
       content: local.note,
       sources: [
@@ -179,12 +182,17 @@ describe('Talebook annotation mapping and sync', () => {
           source_name: 'readest',
           source_connection_id: settings.connectionId,
           source_annotation_id: local.id,
+          source_raw_hash: bookNoteToTalebookInput(local, settings).source_raw_hash,
         },
       ],
     });
     const client = {
       connectionId: settings.connectionId,
-      listAnnotations: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([saved]),
+      listAnnotations: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([saved])
+        .mockResolvedValueOnce([saved]),
       upsertAnnotation: vi.fn().mockResolvedValue(saved),
     } as unknown as TalebookAnnotationClient;
     const first = await syncTalebookBookNotes(client, 42, [local], settings);
@@ -193,7 +201,7 @@ describe('Talebook annotation mapping and sync', () => {
     expect(first.booknotes).toHaveLength(1);
     expect(second.booknotes).toHaveLength(1);
     expect(second.booknotes[0]?.id).toBe(local.id);
-    expect(client.upsertAnnotation).toHaveBeenCalledTimes(2);
+    expect(client.upsertAnnotation).toHaveBeenCalledTimes(1);
     const payload = vi.mocked(client.upsertAnnotation).mock.calls[0]?.[1];
     expect(payload).toMatchObject({
       client_id: local.id,
@@ -201,6 +209,46 @@ describe('Talebook annotation mapping and sync', () => {
       source_connection_id: settings.connectionId,
       source_annotation_id: local.id,
     });
+
+    const changed = [
+      {
+        ...second.booknotes[0]!,
+        note: 'changed',
+        updatedAt: second.booknotes[0]!.updatedAt + 1,
+      },
+    ];
+    await syncTalebookBookNotes(client, 42, changed, settings);
+    expect(client.upsertAnnotation).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves edits and tombstones created while a sync is in flight', () => {
+    const before: BookNote[] = [
+      {
+        id: 'local-note-1',
+        type: 'annotation',
+        cfi: 'epubcfi(/6/4!/4/2)',
+        note: 'before',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ];
+    const synced: BookNote[] = [
+      {
+        ...before[0]!,
+        note: 'server response',
+        updatedAt: 10,
+        source: { name: 'readest', talebookAnnotationId: 7 },
+      },
+    ];
+    const edited = [{ ...before[0]!, note: 'edited during sync', updatedAt: 2 }];
+    const tombstoned = [{ ...before[0]!, deletedAt: 3 }];
+
+    expect(mergeTalebookSyncResult(before, edited, synced)[0]).toMatchObject({
+      note: 'edited during sync',
+      updatedAt: 2,
+      source: { talebookAnnotationId: 7 },
+    });
+    expect(mergeTalebookSyncResult(before, tombstoned, synced)[0]?.deletedAt).toBe(3);
   });
 
   it('does not resurrect a local tombstone or send a remote delete', async () => {

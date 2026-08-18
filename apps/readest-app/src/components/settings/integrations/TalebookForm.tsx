@@ -5,6 +5,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { TalebookAnnotationClient, TalebookSyncError } from '@/services/talebook';
+import type { TalebookSettings } from '@/types/settings';
 import { uniqueId } from '@/utils/misc';
 import { eventDispatcher } from '@/utils/event';
 import { Toggle } from '@/components/primitives/toggle';
@@ -18,7 +19,7 @@ interface TalebookFormProps {
 const TalebookForm: React.FC<TalebookFormProps> = ({ onBack }) => {
   const _ = useTranslation();
   const { envConfig } = useEnv();
-  const { settings, settingsDialogBookKey, setSettings, saveSettings } = useSettingsStore();
+  const { settings, settingsDialogBookKey } = useSettingsStore();
   const current = settings.talebook;
   const bookHash = settingsDialogBookKey.split('-')[0] || '';
   const currentBook = useBookDataStore((state) =>
@@ -40,10 +41,11 @@ const TalebookForm: React.FC<TalebookFormProps> = ({ onBack }) => {
     return Number.isInteger(value) && value > 0 ? value : null;
   };
 
-  const persist = async (talebook: typeof settings.talebook) => {
-    const next = { ...settings, talebook };
-    setSettings(next);
-    await saveSettings(envConfig, next);
+  const persist = async (update: (talebook: TalebookSettings) => TalebookSettings) => {
+    const store = useSettingsStore.getState();
+    const next = { ...store.settings, talebook: update(store.settings.talebook) };
+    store.setSettings(next);
+    await store.saveSettings(envConfig, next);
   };
 
   const handleConnect = async () => {
@@ -67,7 +69,10 @@ const TalebookForm: React.FC<TalebookFormProps> = ({ onBack }) => {
       new URL(candidate.serverUrl);
       const client = new TalebookAnnotationClient(candidate);
       await client.validateConnection();
-      await persist(candidate);
+      await persist((latest) => ({
+        ...candidate,
+        bookIds: { ...latest.bookIds, ...candidate.bookIds },
+      }));
       eventDispatcher.dispatch('toast', {
         type: 'success',
         message: _('Connected to Talebook annotation API v2'),
@@ -87,12 +92,17 @@ const TalebookForm: React.FC<TalebookFormProps> = ({ onBack }) => {
   };
 
   const handleDisconnect = async () => {
-    await persist({ ...current, enabled: false, accessToken: '', lastSyncedAt: 0 });
+    await persist((latest) => ({
+      ...latest,
+      enabled: false,
+      accessToken: '',
+      lastSyncedAt: 0,
+    }));
     eventDispatcher.dispatch('toast', { type: 'info', message: _('Disconnected from Talebook') });
   };
 
   const toggle = async (field: 'enabled' | 'autoSync' | 'privateByDefault') => {
-    await persist({ ...current, [field]: !current[field] });
+    await persist((latest) => ({ ...latest, [field]: !latest[field] }));
   };
 
   const saveBookMapping = async () => {
@@ -104,7 +114,10 @@ const TalebookForm: React.FC<TalebookFormProps> = ({ onBack }) => {
       });
       return;
     }
-    await persist({ ...current, bookIds: { ...current.bookIds, [bookHash]: value } });
+    await persist((latest) => ({
+      ...latest,
+      bookIds: { ...latest.bookIds, [bookHash]: value },
+    }));
     eventDispatcher.dispatch('toast', { type: 'success', message: _('Talebook book ID saved') });
   };
 

@@ -97,6 +97,36 @@ export const mergeTalebookAnnotations = (
   return [...merged.values()];
 };
 
+/**
+ * Reconcile a completed network sync with edits that landed while it was in flight.
+ * The sync result is based on `beforeSync`; records whose local clocks changed in
+ * `current` must win even when the server response carries a later timestamp.
+ */
+export const mergeTalebookSyncResult = (
+  beforeSync: BookNote[],
+  current: BookNote[],
+  synced: BookNote[],
+): BookNote[] => {
+  const beforeById = new Map(beforeSync.map((note) => [note.id, note]));
+  const merged = new Map(synced.map((note) => [note.id, note]));
+
+  for (const note of current) {
+    const before = beforeById.get(note.id);
+    const changedWhileSyncing =
+      !before || note.updatedAt !== before.updatedAt || note.deletedAt !== before.deletedAt;
+    if (!changedWhileSyncing) continue;
+
+    const syncedNote = merged.get(note.id);
+    merged.set(note.id, {
+      ...syncedNote,
+      ...note,
+      source: syncedNote?.source ?? note.source,
+    });
+  }
+
+  return [...merged.values()];
+};
+
 const stableClientId = (note: BookNote): string =>
   note.id.length <= 64 ? note.id : `readest-${md5(note.id)}`;
 
@@ -105,23 +135,25 @@ export const bookNoteToTalebookInput = (
   settings: TalebookSettings,
 ): TalebookAnnotationInput => {
   const annotationType = note.type === 'bookmark' ? 'bookmark' : note.text ? 'highlight' : 'note';
+  const isPrivate = note.source?.isPrivate ?? settings.privateByDefault;
   const sourcePosition =
     note.cfi || note.source?.position || (note.page ? `page:${note.page}` : null);
   const contentHash = md5(
     JSON.stringify([
       annotationType,
+      isPrivate,
       note.cfi,
       note.source?.chapter,
+      sourcePosition,
       note.text,
       note.note,
       note.color,
-      note.updatedAt,
     ]),
   );
   return {
     annotation_type: annotationType,
     client_id: stableClientId(note),
-    is_private: note.source?.isPrivate ?? settings.privateByDefault,
+    is_private: isPrivate,
     cfi: note.cfi || null,
     chapter: note.source?.chapter || '',
     quote_text: note.text || '',
@@ -161,6 +193,19 @@ export const syncTalebookBookNotes = async (
 ): Promise<TalebookBookSyncResult> => {
   const remote = await client.listAnnotations(bookId);
   let booknotes = mergeTalebookAnnotations(localNotes, remote, client.connectionId);
+  const syncedHashes = new Map<string, string>();
+  for (const annotation of remote) {
+    const ownSource = annotation.sources.find(
+      (source) =>
+        source.source_name === 'readest' &&
+        source.source_connection_id === client.connectionId &&
+        !!source.source_annotation_id &&
+        !!source.source_raw_hash,
+    );
+    if (ownSource?.source_annotation_id && ownSource.source_raw_hash) {
+      syncedHashes.set(ownSource.source_annotation_id, ownSource.source_raw_hash);
+    }
+  }
   const candidates = booknotes.filter(
     (note) => !note.deletedAt && !note.source?.readOnly && note.type !== 'excerpt',
   );
@@ -169,7 +214,9 @@ export const syncTalebookBookNotes = async (
 
   for (const note of candidates) {
     try {
-      const saved = await client.upsertAnnotation(bookId, bookNoteToTalebookInput(note, settings));
+      const input = bookNoteToTalebookInput(note, settings);
+      if (syncedHashes.get(note.id) === input.source_raw_hash) continue;
+      const saved = await client.upsertAnnotation(bookId, input);
       booknotes = mergeTalebookAnnotations(booknotes, [saved], client.connectionId);
       pushed += 1;
     } catch (error) {

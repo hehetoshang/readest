@@ -8,6 +8,7 @@ import { SYNC_NOTES_INTERVAL_SEC } from '@/services/constants';
 import { throttle } from '@/utils/throttle';
 import { getXPointerFromCFI, getCFIFromXPointer, XCFI } from '@/utils/xcfi';
 import { getIndexFromCfi } from '@/utils/cfi';
+import { isChapterOnlyBookNote } from '@/utils/booknote';
 
 export const useNotesSync = (bookKey: string) => {
   const { user } = useAuth();
@@ -59,7 +60,9 @@ export const useNotesSync = (bookKey: string) => {
   const convertXPointersOnPull = async (notes: BookNote[]): Promise<BookNote[]> => {
     const bookData = getBookData(bookKey);
     const book = bookData?.book;
-    if (!book || FIXED_LAYOUT_FORMATS.has(book.format)) return notes.filter((n) => n.cfi);
+    if (!book || FIXED_LAYOUT_FORMATS.has(book.format)) {
+      return notes.filter((note) => note.cfi || isChapterOnlyBookNote(note));
+    }
 
     const view = getView(bookKey);
     const converted: BookNote[] = [];
@@ -102,10 +105,11 @@ export const useNotesSync = (bookKey: string) => {
         } catch {
           // Conversion failed — discard note
         }
-      } else if (note.cfi) {
+      } else if (note.cfi || isChapterOnlyBookNote(note)) {
         converted.push(note);
       }
-      // Discard notes with neither cfi nor xpointer
+      // Discard records with no navigable position unless they are an explicit
+      // chapter-only external annotation.
     }
     return converted;
   };
@@ -118,9 +122,10 @@ export const useNotesSync = (bookKey: string) => {
     const bookNotes = config.booknotes ?? [];
     const newNotes = bookNotes.filter(
       (note) =>
-        !note.xpointer0 ||
-        lastSyncedAtNotes < note.updatedAt ||
-        lastSyncedAtNotes < (note.deletedAt ?? 0),
+        !note.source?.readOnly &&
+        (!note.xpointer0 ||
+          lastSyncedAtNotes < note.updatedAt ||
+          lastSyncedAtNotes < (note.deletedAt ?? 0)),
     );
     newNotes.forEach((note) => {
       note.bookHash = book.hash;
