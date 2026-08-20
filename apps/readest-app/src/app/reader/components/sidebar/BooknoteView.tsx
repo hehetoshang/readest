@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useOverlayScrollbars } from 'overlayscrollbars-react';
 import 'overlayscrollbars/overlayscrollbars.css';
-import * as CFI from 'foliate-js/epubcfi.js';
 import { PiNotePencil } from 'react-icons/pi';
 import { RiBookmark3Line, RiBookmarkLine } from 'react-icons/ri';
 
@@ -10,7 +9,7 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { findTocItemBS } from '@/services/nav';
-import { findNearestCfi } from '@/utils/cfi';
+import { compareOptionalCfi, findNearestCfi } from '@/utils/cfi';
 import { TOCItem } from '@/libs/document';
 import { BookNote, BooknoteGroup, BookNoteType } from '@/types/book';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -53,20 +52,21 @@ const BooknoteView: React.FC<{
   const sortedGroups = useMemo<BooknoteGroup[]>(() => {
     const groups: { [href: string]: BooknoteGroup } = {};
     for (const booknote of filteredNotes) {
-      const tocItem = findTocItemBS(toc ?? [], booknote.cfi);
-      const href = tocItem?.href || '';
-      const label = tocItem?.label || '';
-      const id = tocItem?.id || 0;
+      const tocItem = booknote.cfi ? findTocItemBS(toc ?? [], booknote.cfi) : undefined;
+      const fallbackChapter = booknote.source?.chapter || _('Unknown chapter');
+      const href = tocItem?.href || `external:${fallbackChapter}`;
+      const label = tocItem?.label || fallbackChapter;
+      const id = tocItem?.id ?? Number.MAX_SAFE_INTEGER;
       if (!groups[href]) {
         groups[href] = { id, href, label, booknotes: [] };
       }
       groups[href].booknotes.push(booknote);
     }
     Object.values(groups).forEach((g) => {
-      g.booknotes.sort((a, b) => CFI.compare(a.cfi, b.cfi));
+      g.booknotes.sort(compareOptionalCfi);
     });
     return Object.values(groups).sort((a, b) => a.id - b.id);
-  }, [filteredNotes, toc]);
+  }, [_, filteredNotes, toc]);
 
   // Flatten group/item tree into a single virtualizable list.
   const flatItems = useMemo<FlatBooknoteRow[]>(() => {
@@ -91,7 +91,7 @@ const BooknoteView: React.FC<{
   const nearestCfi = useMemo(() => {
     const allSorted: string[] = [];
     for (const g of sortedGroups) {
-      for (const n of g.booknotes) allSorted.push(n.cfi);
+      for (const n of g.booknotes) if (n.cfi) allSorted.push(n.cfi);
     }
     return findNearestCfi(allSorted, progress?.location);
   }, [progress?.location, sortedGroups]);
@@ -109,7 +109,7 @@ const BooknoteView: React.FC<{
 
   const handleBrowseBookNotes = useCallback(() => {
     if (filteredNotes.length === 0) return;
-    const sorted = [...filteredNotes].sort((a, b) => CFI.compare(a.cfi, b.cfi));
+    const sorted = [...filteredNotes].sort(compareOptionalCfi);
     setActiveBooknoteType(bookKey, type);
     setBooknoteResults(bookKey, sorted);
   }, [filteredNotes, bookKey, type, setActiveBooknoteType, setBooknoteResults]);

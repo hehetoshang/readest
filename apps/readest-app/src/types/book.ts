@@ -157,6 +157,23 @@ export interface BookNote {
   style?: HighlightStyle;
   color?: HighlightColor;
   note: string;
+  /** External provenance and navigation fallback for imported annotations. */
+  source?: {
+    name: string;
+    displayName?: string;
+    connectionId?: string;
+    externalId?: string;
+    position?: string;
+    chapter?: string;
+    authorName?: string;
+    talebookAnnotationId?: number;
+    contract?: string;
+    syncStatus?: 'pending' | 'synced' | 'failed';
+    syncError?: string;
+    isPrivate?: boolean;
+    readOnly?: boolean;
+    degraded?: boolean;
+  };
   /**
    * If true, this annotation should be applied to every occurrence of `text`
    * within the same section (chapter/spine item), in addition to the original

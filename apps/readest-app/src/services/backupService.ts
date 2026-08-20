@@ -48,6 +48,7 @@ export const BACKUP_SETTINGS_BLACKLIST = [
   'lastSyncedAtNotes',
   'lastSyncedAtReplicas',
   'readwise.lastSyncedAt',
+  'talebook.lastSyncedAt',
   'hardcover.lastSyncedAt',
   'googleDrive.deviceId',
   'googleDrive.lastSyncedAt',
@@ -82,6 +83,8 @@ export const BACKUP_SETTINGS_CREDENTIAL_FIELDS = [
   'kosync.userkey',
   'kosync.password',
   'readwise.accessToken',
+  'talebook.username',
+  'talebook.accessToken',
   'hardcover.accessToken',
   // S3 access keys are strong, long-lived cloud credentials — strip them from
   // unencrypted backup zips unless the user opts into including credentials.

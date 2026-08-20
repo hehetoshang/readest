@@ -30,6 +30,7 @@ import { BookData, useBookDataStore } from './bookDataStore';
 import { useLibraryStore } from './libraryStore';
 import { clearBookProgress, getBookProgress, setBookProgress } from './readerProgressStore';
 import { uniqueId } from '@/utils/misc';
+import { isChapterOnlyBookNote } from '@/utils/booknote';
 import { emitReaderEvent, bookEventData } from '@/services/mokeBridge';
 
 interface ViewState {
@@ -251,7 +252,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         }
       }
       // Filter out invalid booknotes
-      config.booknotes = config.booknotes?.filter((booknote) => booknote.cfi) ?? [];
+      config.booknotes =
+        config.booknotes?.filter((booknote) => booknote.cfi || isChapterOnlyBookNote(booknote)) ??
+        [];
       // Load cached book navigation (TOC + section fragments) or compute and persist.
       if (book.format === 'EPUB' && bookDoc.rendition?.layout !== 'pre-paginated') {
         const cachedNav = await appService.loadBookNav(book);

@@ -23,6 +23,7 @@ import { navigateToLogin } from '@/utils/nav';
 import KOSyncForm from './integrations/KOSyncForm';
 import ReadwiseForm from './integrations/ReadwiseForm';
 import HardcoverForm from './integrations/HardcoverForm';
+import TalebookForm from './integrations/TalebookForm';
 import SendToReadestForm from './integrations/SendToReadestForm';
 import WebDAVForm from './integrations/WebDAVForm';
 import SubPageHeader from './SubPageHeader';
@@ -68,6 +69,7 @@ type SubPage =
   // | 'readest-cloud'
   | 'readwise'
   | 'hardcover'
+  | 'talebook'
   | 'opds'
   | 'send'
   | null;
@@ -132,6 +134,7 @@ const IntegrationsPanel: React.FC = () => {
       requestedSubPage === 'webdav' ||
       requestedSubPage === 'readwise' ||
       requestedSubPage === 'hardcover' ||
+      requestedSubPage === 'talebook' ||
       requestedSubPage === 'opds' ||
       requestedSubPage === 'send'
     ) {
@@ -192,6 +195,12 @@ const IntegrationsPanel: React.FC = () => {
         <HardcoverForm onBack={() => setSubPage(null)} />
       </div>
     );
+  if (subPage === 'talebook')
+    return (
+      <div className='my-4 w-full'>
+        <TalebookForm onBack={() => setSubPage(null)} />
+      </div>
+    );
   if (subPage === 'opds')
     return (
       <div className='my-4 w-full'>
@@ -219,6 +228,7 @@ const IntegrationsPanel: React.FC = () => {
 
   const readwiseStatus = settings.readwise?.enabled ? _('Connected') : _('Not connected');
   const hardcoverStatus = settings.hardcover?.enabled ? _('Connected') : _('Not connected');
+  const talebookStatus = settings.talebook?.enabled ? _('Connected') : _('Not connected');
 
   const webdavStatus = settings.webdav?.enabled
     ? isWebDAVSyncing
@@ -259,6 +269,12 @@ const IntegrationsPanel: React.FC = () => {
               title={_('Hardcover')}
               status={hardcoverStatus}
               onClick={() => setSubPage('hardcover')}
+            />
+            <IntegrationRow
+              icon={RiBookOpenLine}
+              title={_('Talebook')}
+              status={talebookStatus}
+              onClick={() => setSubPage('talebook')}
             />
           </div>
         </div>
