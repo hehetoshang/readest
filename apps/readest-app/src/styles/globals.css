@@ -745,6 +745,35 @@ input[type='range'].slider-input {
   border-radius: 8px;
 }
 
+/* Same-origin document navigations between Moke and the embedded Readest app
+   participate automatically, regardless of which button or native BACK path
+   initiated them. */
+@view-transition {
+  navigation: auto;
+}
+
+/* Moke -> Readest: keep Moke still underneath and slide the reader in. */
+html[data-moke-reader-transition='enter']::view-transition-old(root) {
+  z-index: 1;
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-moke-reader-transition='enter']::view-transition-new(root) {
+  z-index: 2;
+  animation: moke-reader-enter 260ms cubic-bezier(0.2, 0, 0, 1) both;
+  mix-blend-mode: normal;
+}
+
+@keyframes moke-reader-enter {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 /* View Transitions for library navigation */
 ::view-transition-old(root),
 ::view-transition-new(root) {
