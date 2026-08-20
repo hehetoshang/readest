@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { bootstrapMokeLaunchContext, mokeProgressStorageKey } from '@/helpers/mokeLaunchContext';
 
@@ -7,6 +7,26 @@ describe('bootstrapMokeLaunchContext', () => {
     localStorage.clear();
     window.history.replaceState({}, '', '/reader?moke=1&mokeBookId=42');
     window.__MOKE_RESTORE_PROGRESS = null;
+  });
+
+  afterEach(() => {
+    delete document.documentElement.dataset['mokeReaderTransition'];
+    Reflect.deleteProperty(window, 'navigation');
+  });
+
+  it('marks a cross-document transition when entering Readest from Moke', () => {
+    Object.defineProperty(window, 'navigation', {
+      configurable: true,
+      value: {
+        activation: {
+          from: { url: 'http://tauri.localhost/library' },
+        },
+      },
+    });
+
+    bootstrapMokeLaunchContext();
+
+    expect(document.documentElement.dataset['mokeReaderTransition']).toBe('enter');
   });
 
   it('restores guest progress from local storage', () => {
