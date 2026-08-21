@@ -441,6 +441,25 @@ pub fn open_reader_window(
     moke_book_id: Option<String>,
     restore_progress: Option<serde_json::Value>,
 ) -> Result<(), String> {
+    open_reader_window_with_debug(
+        app,
+        file,
+        eink,
+        false,
+        moke_book_id,
+        restore_progress,
+    )
+}
+
+#[cfg(desktop)]
+fn open_reader_window_with_debug(
+    app: &AppHandle,
+    file: Option<PathBuf>,
+    eink: bool,
+    debug_panel: bool,
+    moke_book_id: Option<String>,
+    restore_progress: Option<serde_json::Value>,
+) -> Result<(), String> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static READER_SEQ: AtomicUsize = AtomicUsize::new(0);
 
@@ -475,6 +494,7 @@ pub fn open_reader_window(
     // ponytail: host (Moke) forwards its e-ink toggle so the embedded reader
     // boots in e-ink mode on devices the CSS media query can't detect (desktop WebView).
     let eink_js = if eink { "true" } else { "false" };
+    let debug_panel_js = if debug_panel { "true" } else { "false" };
     let moke_book_id_js = serde_json::to_string(&moke_book_id).map_err(|e| e.to_string())?;
     let restore_progress_js = serde_json::to_string(&restore_progress).map_err(|e| e.to_string())?;
 
@@ -483,6 +503,7 @@ pub fn open_reader_window(
             window.OPEN_WITH_FILES = {files_js};
             window.__MOKE_EMBEDDED = true;
             window.__MOKE_EINK = {eink_js};
+            window.__MOKE_DEBUG_PANEL = {debug_panel_js};
             window.__MOKE_BOOK_ID = {moke_book_id_js};
             window.__MOKE_RESTORE_PROGRESS = {restore_progress_js};
             window.addEventListener('DOMContentLoaded', function() {{
@@ -533,13 +554,15 @@ async fn open_reader(
     app: AppHandle,
     file_path: String,
     eink: bool,
+    debug_panel: Option<bool>,
     moke_book_id: Option<String>,
     restore_progress: Option<serde_json::Value>,
 ) -> Result<(), String> {
-    open_reader_window(
+    open_reader_window_with_debug(
         &app,
         Some(PathBuf::from(file_path)),
         eink,
+        debug_panel.unwrap_or(false),
         moke_book_id,
         restore_progress,
     )
