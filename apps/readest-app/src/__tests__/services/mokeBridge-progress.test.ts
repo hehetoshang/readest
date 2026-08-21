@@ -6,7 +6,15 @@ const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: fetchMock }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(undefined) }));
 
-import { emitReaderEvent } from '@/services/mokeBridge';
+import { mokeProgressStorageKey } from '@/helpers/mokeLaunchContext';
+import {
+  beginMokeAnnotationNavigation,
+  cancelMokeAnnotationNavigation,
+  captureMokeAnnotationNavigation,
+  completeMokeAnnotationNavigation,
+  emitReaderEvent,
+  withMokeAnnotationNavigation,
+} from '@/services/mokeBridge';
 
 const SERVER_URL = 'http://192.168.1.5:8080';
 
@@ -17,14 +25,18 @@ describe('mokeBridge server-side progress persistence', () => {
     window.__MOKE_EMBEDDED = true;
     window.__MOKE_SERVER_URL = SERVER_URL;
     window.__MOKE_BOOK_ID = '42';
+    window.__MOKE_RESTORE_PROGRESS = null;
+    cancelMokeAnnotationNavigation(false);
     localStorage.clear();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    cancelMokeAnnotationNavigation(false);
     window.__MOKE_SERVER_URL = null;
     window.__MOKE_BOOK_ID = null;
+    window.__MOKE_RESTORE_PROGRESS = null;
   });
 
   it('posts page:changed progress to the Moke server after the debounce window', async () => {
@@ -97,6 +109,83 @@ describe('mokeBridge server-side progress persistence', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('suppresses only correlated annotation navigation events, then saves the real page turn', async () => {
+    window.__MOKE_RESTORE_PROGRESS = {
+      location: 'epubcfi(/6/4!/4/2)',
+      moke_navigation_id: 'locate-42',
+      moke_navigation_kind: 'annotation-locate',
+    };
+
+    // A default startup relocate can arrive before the restore command starts.
+    const startup = captureMokeAnnotationNavigation();
+    void emitReaderEvent(
+      'page:changed',
+      withMokeAnnotationNavigation(
+        { book_id: 'abc123', location: 'reader-default', page: 1 },
+        startup,
+      ),
+    );
+
+    beginMokeAnnotationNavigation();
+    await vi.advanceTimersByTimeAsync(30_000); // slow book: no correctness grace window
+    const restored = captureMokeAnnotationNavigation();
+    completeMokeAnnotationNavigation();
+    void emitReaderEvent(
+      'page:changed',
+      withMokeAnnotationNavigation(
+        // Readest normalized the supplied CFI; correlation, not equality, wins.
+        { book_id: 'abc123', location: 'epubcfi(/6/4!/4/2:0)', page: 12 },
+        restored,
+      ),
+    );
+    await vi.advanceTimersByTimeAsync(1_300);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(0);
+
+    void emitReaderEvent('page:changed', {
+      book_id: 'abc123',
+      location: 'epubcfi(/6/6)',
+      page: 13,
+    });
+    await vi.advanceTimersByTimeAsync(1_300);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.progress.location).toBe('epubcfi(/6/6)');
+    expect(
+      JSON.parse(localStorage.getItem(mokeProgressStorageKey(SERVER_URL, '42'))!).location,
+    ).toBe('epubcfi(/6/6)');
+  });
+
+  it('recycles annotation navigation state after failure and timeout', async () => {
+    window.__MOKE_RESTORE_PROGRESS = {
+      location: 'epubcfi(/6/4)',
+      moke_navigation_id: 'locate-failure',
+      moke_navigation_kind: 'annotation-locate',
+    };
+    beginMokeAnnotationNavigation();
+    cancelMokeAnnotationNavigation();
+
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'after-failure' });
+    await vi.advanceTimersByTimeAsync(1_300);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockClear();
+    window.__MOKE_RESTORE_PROGRESS = {
+      location: 'epubcfi(/6/8)',
+      moke_navigation_id: 'locate-timeout',
+      moke_navigation_kind: 'annotation-locate',
+    };
+    expect(captureMokeAnnotationNavigation()).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1_000 + 1);
+    expect(captureMokeAnnotationNavigation()).toBeNull();
+
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'after-timeout' });
+    await vi.advanceTimersByTimeAsync(1_300);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('debounces rapid page turns and saves only the latest location', async () => {
     void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'epubcfi(/6/1)', page: 1 });
     await vi.advanceTimersByTimeAsync(400);
@@ -112,6 +201,19 @@ describe('mokeBridge server-side progress persistence', () => {
     const body = JSON.parse(init.body as string);
     expect(body.progress.location).toBe('epubcfi(/6/3)');
     expect(body.progress.page).toBe(3);
+  });
+
+  it('recycles annotation navigation state when the book closes', async () => {
+    window.__MOKE_RESTORE_PROGRESS = {
+      location: 'epubcfi(/6/4)',
+      moke_navigation_id: 'locate-close',
+      moke_navigation_kind: 'annotation-locate',
+    };
+    expect(captureMokeAnnotationNavigation()).not.toBeNull();
+
+    await emitReaderEvent('book:closed', { book_id: 'abc123' });
+
+    expect(captureMokeAnnotationNavigation()).toBeNull();
   });
 
   it('flushes pending progress when the book closes', async () => {

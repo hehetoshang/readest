@@ -3,6 +3,10 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { convertBlobUrlToDataUrl, BookDoc, getDirection } from '@/libs/document';
 import { BOOK_IDS_SEPARATOR } from '@/services/constants';
+import {
+  captureMokeAnnotationNavigation,
+  type MokeAnnotationNavigationContext,
+} from '@/services/mokeBridge';
 import { BookConfig, PageInfo } from '@/types/book';
 import { FoliateView, wrappedFoliateView } from '@/types/view';
 import { Insets } from '@/types/misc';
@@ -195,7 +199,10 @@ const FoliateViewer: React.FC<{
   // jank we were trying to fix. rAF runs once per frame, gets scheduled
   // by the browser's normal vsync loop, and doesn't accumulate when
   // the page is busy — which is the behaviour we want here.
-  const pendingRelocateRef = useRef<CustomEvent | null>(null);
+  const pendingRelocateRef = useRef<{
+    event: CustomEvent;
+    mokeNavigation: MokeAnnotationNavigationContext | null;
+  } | null>(null);
   const relocateRafRef = useRef<number | null>(null);
   const cancelRelocateScheduled = useCallback(() => {
     const id = relocateRafRef.current;
@@ -205,10 +212,10 @@ const FoliateViewer: React.FC<{
   }, []);
   const commitRelocate = useCallback(() => {
     relocateRafRef.current = null;
-    const event = pendingRelocateRef.current;
+    const pending = pendingRelocateRef.current;
     pendingRelocateRef.current = null;
-    if (!event) return;
-    const detail = event.detail;
+    if (!pending) return;
+    const detail = pending.event.detail;
     const atEnd = viewRef.current?.renderer.atEnd || false;
     const { current, next, total } = detail.location as PageInfo;
     const currentPage = atEnd && total > 0 ? total - 1 : current;
@@ -223,13 +230,17 @@ const FoliateViewer: React.FC<{
       detail.time,
       detail.range,
       detail.fraction,
+      pending.mokeNavigation,
     );
   }, [bookKey, setProgress]);
 
   const progressRelocateHandler = (event: Event) => {
     // Always stash the latest detail; if another rAF is already pending
     // it'll pick this up and the intermediate states are skipped.
-    pendingRelocateRef.current = event as CustomEvent;
+    pendingRelocateRef.current = {
+      event: event as CustomEvent,
+      mokeNavigation: captureMokeAnnotationNavigation(),
+    };
     // requestAnimationFrame is paused while the WebView is backgrounded, so the
     // rAF-coalesced commit below would never run during background TTS - which
     // freezes book.progress (and readerProgressStore, and the home-screen

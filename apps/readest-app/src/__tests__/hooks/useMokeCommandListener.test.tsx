@@ -11,10 +11,23 @@ vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({ listen: listenMock }),
 }));
 
-const emitReaderEventMock = vi.hoisted(() => vi.fn());
+const {
+  emitReaderEventMock,
+  beginMokeAnnotationNavigationMock,
+  completeMokeAnnotationNavigationMock,
+  cancelMokeAnnotationNavigationMock,
+} = vi.hoisted(() => ({
+  emitReaderEventMock: vi.fn(),
+  beginMokeAnnotationNavigationMock: vi.fn(),
+  completeMokeAnnotationNavigationMock: vi.fn(),
+  cancelMokeAnnotationNavigationMock: vi.fn(),
+}));
 
 vi.mock('@/services/mokeBridge', () => ({
   emitReaderEvent: emitReaderEventMock,
+  beginMokeAnnotationNavigation: beginMokeAnnotationNavigationMock,
+  completeMokeAnnotationNavigation: completeMokeAnnotationNavigationMock,
+  cancelMokeAnnotationNavigation: cancelMokeAnnotationNavigationMock,
 }));
 
 // readerStore: a bare minimum stand-in with getState / subscribe.
@@ -135,6 +148,7 @@ describe('useMokeCommandListener listener lifecycle (H20-L5)', () => {
       isPrimary: true,
     };
     registered({ payload: { command: 'get_position', request_id: 'r1' } });
+    await flushMicrotasks();
 
     expect(emitReaderEventMock).toHaveBeenCalledWith(
       'command:result',
@@ -167,6 +181,9 @@ describe('useMokeCommandListener restore retry (H20-L2)', () => {
     };
     readerSubscribers.forEach((fn) => fn(readerState));
 
+    await flushMicrotasks();
+    expect(beginMokeAnnotationNavigationMock).toHaveBeenCalledTimes(1);
+    expect(completeMokeAnnotationNavigationMock).toHaveBeenCalledTimes(1);
     expect(emitReaderEventMock).toHaveBeenCalledWith(
       'command:result',
       expect.objectContaining({
