@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
-import { Bug } from 'lucide-react';
 import { writeTextToClipboard } from '@/utils/clipboard';
 import { useDebugLogStore, type DebugLogLevel, type DebugLogType } from '@/services/debugLog';
 
@@ -97,7 +96,11 @@ export default function DebugLogPanel({ visible }: { visible: boolean }) {
         }}
         aria-label='Debug logs'
       >
-        <Bug size={21} aria-hidden='true' />
+        <img
+          src='/debug.avif'
+          alt='Debug logs'
+          style={{ width: 20, height: 20, objectFit: 'contain' }}
+        />
         {errorCount > 0 && (
           <span
             style={{
