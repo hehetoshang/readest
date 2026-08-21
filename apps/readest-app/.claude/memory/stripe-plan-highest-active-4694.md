@@ -1,7 +1,7 @@
 ---
 name: stripe-plan-highest-active-4694
 description: "Stripe plans.plan must be the MAX over active subscriptions, not the last webhook; + live/skipped integration-test pattern and pre-push gotchas"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9cf7e8fc-69fb-43c7-a6f5-3d096a87b6ec

@@ -1,7 +1,7 @@
 ---
 name: pdf-scroll-mode-wheel-double-4727
 description: Fixed-layout/PDF scrolled mode scrolls 2x (instant lurch) when wheeling over the page vs smooth over the margin
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 063f5588-52bf-4042-92f9-babcf492e378

@@ -1,7 +1,7 @@
 ---
 name: koplugin-cover-upload
 description: "koplugin cover system — where local/cloud covers come from, and the"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 95cdff70-ce2c-4077-82a8-922f9578a22f

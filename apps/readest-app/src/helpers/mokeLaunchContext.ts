@@ -56,6 +56,7 @@ export function bootstrapMokeLaunchContext(): void {
   const mokeBookId = params.get('mokeBookId') || '';
   window.__MOKE_EMBEDDED = true;
   window.__MOKE_EINK = params.get('mokeEink') === '1';
+  window.__MOKE_DEBUG_PANEL = params.get('mokeDebug') === '1';
   window.__MOKE_BOOK_ID = mokeBookId || null;
   window.__MOKE_SERVER_URL = serverUrl || null;
   let remoteProgress: Record<string, unknown> | null = null;

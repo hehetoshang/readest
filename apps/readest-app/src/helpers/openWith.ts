@@ -7,6 +7,7 @@ declare global {
     OPEN_WITH_FILES?: string[] | null;
     __MOKE_EMBEDDED?: boolean;
     __MOKE_EINK?: boolean;
+    __MOKE_DEBUG_PANEL?: boolean;
     __MOKE_BOOK_ID?: string | null;
     __MOKE_SERVER_URL?: string | null;
     __MOKE_RESTORE_PROGRESS?: unknown;

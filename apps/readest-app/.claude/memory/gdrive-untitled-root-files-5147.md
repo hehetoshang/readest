@@ -1,7 +1,7 @@
 ---
 name: gdrive-untitled-root-files-5147
 description: "#5147 Untitled files in Drive root = non-atomic create-then-name in GoogleDriveProvider.writeBinary; MERGED PR #5150 multipart/resumable atomic creates"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: b616ba37-dbf6-48e5-95b9-34fd2c642626

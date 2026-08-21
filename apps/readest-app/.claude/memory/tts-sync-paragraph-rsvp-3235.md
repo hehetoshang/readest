@@ -1,6 +1,6 @@
 ---
 name: tts-sync-paragraph-rsvp-3235
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: c39202b7-d8c2-4150-a618-c31857a8ad73

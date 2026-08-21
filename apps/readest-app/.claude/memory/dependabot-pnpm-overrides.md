@@ -1,7 +1,7 @@
 ---
 name: dependabot-pnpm-overrides
 description: How to fix transitive-dependency Dependabot/CVE alerts in the readest monorepo (pnpm overrides location + style)
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: cdc9c728-a2c7-4a9e-b87a-44046560a4fa

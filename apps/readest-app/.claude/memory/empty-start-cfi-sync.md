@@ -1,7 +1,7 @@
 ---
 name: empty-start-cfi-sync
 description: "Invalid synced-progress CFIs like epubcfi(/6/24!/4,,/20/1:58) — the empty-start range bug from the cfi-inert skip-link, and the read-side normalizeLocationCfi sanitizer"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: ffa4a291-55fa-4cd5-8e35-0ac2852ff5c9

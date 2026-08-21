@@ -1,7 +1,7 @@
 ---
 name: ios-sim-drive-via-dev-server-relay
 description: How to drive/verify the Readest iOS-simulator app - temp dev-server eval relay works; iwdp/idb dead ends; tauri ios dev port-3000 conflict symptom
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5e4be60f-c98e-4061-a5e7-96b791b6da34

@@ -1,7 +1,7 @@
 ---
 name: fxl-portrait-autospread-offcenter-4984
 description: PDF/FXL auto-spread in portrait rendered the lone page off-center and made taps turn pages
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: f24a5890-de13-4767-bb33-97621f332e44

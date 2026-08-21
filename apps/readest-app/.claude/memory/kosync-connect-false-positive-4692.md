@@ -1,7 +1,7 @@
 ---
 name: kosync-connect-false-positive-4692
 description: "KOSync connect() accepted any 2xx (even an HTML web-UI page) as login → misconfigured Server URL silently \"connects\" but never syncs"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 43e853c2-58ea-42f0-97ed-66aa3f65e4d1

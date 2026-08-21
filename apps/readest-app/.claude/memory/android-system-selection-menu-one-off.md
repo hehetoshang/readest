@@ -1,7 +1,7 @@
 ---
 name: android-system-selection-menu-one-off
 description: "One-off Android system selection ActionMode (Copy/Share/Select all) appeared over the reader on Xiaomi WebView 148 (2026-07-17, unreproducible) - suppression mechanism, ruled-out triggers, and ready fix design if it recurs"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 353e9c4d-b3c6-4eeb-9bf1-8254615b2d3d

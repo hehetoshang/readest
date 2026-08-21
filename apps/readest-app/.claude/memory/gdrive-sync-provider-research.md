@@ -1,7 +1,7 @@
 ---
 name: gdrive-sync-provider-research
 description: Research on the ratatabananana-bit Google Drive mod for building a Drive FileSyncProvider; OAuth approach + reuse map
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 50e2c2b8-ca61-4c33-acae-cd5d2c9aa93f

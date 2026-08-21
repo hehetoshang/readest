@@ -1,7 +1,7 @@
 ---
 name: proofread-enhancements-4700
 description: "Proofread/replacement-rule feature — sync, regex UI, Opt/Alt+P shortcut, i18n (issue"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 41894f93-c46e-457b-be84-847ccf6243d7

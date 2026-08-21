@@ -1,7 +1,7 @@
 ---
 name: security-advisories-web-2026-06
 description: "GHSA advisory fixes (OPDS SSRF, storage traversal, Stripe hijack, Tauri IPC scoping) — PRs #4638 (web) + #4639 (native); canonical isBlockedHost location"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 552008b6-251e-478c-91f3-f05526537157

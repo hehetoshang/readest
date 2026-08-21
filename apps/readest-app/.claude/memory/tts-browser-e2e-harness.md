@@ -1,7 +1,7 @@
 ---
 name: tts-browser-e2e-harness
 description: How to build a faithful TTS auto-advance browser e2e test (real view + real useTTSControl + mock client only)
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: fc8905a6-43fb-4e61-ae78-a2081098f6bb

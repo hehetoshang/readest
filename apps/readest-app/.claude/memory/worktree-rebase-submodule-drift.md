@@ -1,7 +1,7 @@
 ---
 name: worktree-rebase-submodule-drift
 description: "Rebasing a worktree onto an origin/main that bumped foliate-js leaves the submodule at the old commit; pre-push full-suite fails on the new submodule's tests"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 33b70e98-fb55-467a-b03f-e4065491bc7e

@@ -1,7 +1,7 @@
 ---
 name: paragraph-mode-accidental-exit-4474
 description: Paragraph mode exited on stray taps + control bar off-center with pinned sidebar; fix = reveal-bar event + absolute→fixed
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 3f480cd2-ca07-4eef-ac23-e60e497f882b

@@ -1,7 +1,7 @@
 ---
 name: opds-autodownload-tls-skipssl-4988
 description: "#4988 OPDS auto-download failed on self-signed/private-CA servers — native download_file (rustls) needs skipSslVerification like the manual path (#2900)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9066b80b-3cb5-44df-9c4b-7f609cf285a5

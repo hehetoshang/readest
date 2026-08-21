@@ -1,7 +1,7 @@
 ---
 name: webdav-filesync-refactor-plan
 description: Planned refactor extracting a provider-agnostic file-sync engine (LWW/CRDT) so WebDAV/Drive/Dropbox/FTP/SFTP reuse it
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a9e2f86a-c773-4f5d-95d7-4451d332de5d

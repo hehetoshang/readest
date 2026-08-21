@@ -40,6 +40,8 @@ export const LibraryGroupByType = {
   Group: 'group',
   Series: 'series',
   Author: 'author',
+  Tag: 'tag',
+  Subject: 'subject',
 } as const;
 
 export type LibraryGroupByType = (typeof LibraryGroupByType)[keyof typeof LibraryGroupByType];
@@ -53,7 +55,6 @@ export interface ReadSettings {
   notebookWidth: string;
   isNotebookPinned: boolean;
   notebookActiveTab: NotebookTab;
-  autohideCursor: boolean;
   translationProvider: string;
   translateTargetLang: string;
   /**
@@ -82,12 +83,36 @@ export interface KOSyncSettings {
   deviceName: string;
   checksumMethod: KOSyncChecksumMethod;
   strategy: KOSyncStrategy;
+  customHeaders?: Record<string, string>;
+}
+
+export interface BookOrbitSettings {
+  enabled: boolean;
+  /** Base server origin, e.g. https://books.example.com (no /api/v1/koreader suffix). */
+  serverUrl: string;
+  username: string;
+  userkey: string;
+  password?: string;
+  deviceId: string;
+  deviceName: string;
+  strategy: KOSyncStrategy;
+  syncProgress: boolean;
+  /** Annotations and bookmarks. */
+  syncNotes: boolean;
+  syncStats: boolean;
+  syncBookStates: boolean;
+  customHeaders?: Record<string, string>;
 }
 
 export interface ReadwiseSettings {
   enabled: boolean;
   accessToken: string;
   lastSyncedAt: number;
+  /**
+   * Send the book cover with pushed highlights (image_url). Optional so
+   * settings persisted before this option existed default to enabled.
+   */
+  includeCoverImage?: boolean;
   /**
    * Advanced: override the Readwise API base URL (e.g. for a self-hosted,
    * Readwise-compatible receiver). When unset or blank, the official
@@ -240,6 +265,25 @@ export interface OneDriveSettings {
 }
 
 /**
+ * iCloud Drive file-sync settings. Available only in the iOS/macOS Tauri
+ * apps: the backend is the app's ubiquity container, synced by the OS. No
+ * credentials and no OAuth — the device's iCloud session is the account.
+ * `deviceId`/`lastSyncedAt`/`providerSelectedAt` are device-local.
+ */
+export interface ICloudSettings {
+  enabled: boolean;
+  syncProgress?: boolean;
+  syncNotes?: boolean;
+  syncBooks?: boolean;
+  fullSync?: boolean;
+  strategy?: KOSyncStrategy;
+  deviceId?: string;
+  lastSyncedAt?: number;
+  /** See {@link WebDAVSettings.providerSelectedAt}. */
+  providerSelectedAt?: number;
+}
+
+/**
  * Readest Cloud's own library-sync switch. Readest Cloud used to be the
  * derived fallback — "on" whenever no third-party provider was enabled —
  * because exactly one provider could own the library channels. Providers are
@@ -346,15 +390,29 @@ export interface SystemSettings {
    * `BACKUP_SETTINGS_BLACKLIST`.
    */
   autoImportFolders?: string[];
+  /**
+   * The subset of {@link autoImportFolders} the user imported with "Import all
+   * into library" (flatten). Auto-imported books from those folders go straight
+   * to the library root; every other watched folder mirrors its subfolders as
+   * groups, matching the dialog's default "Create groups from subfolders" —
+   * which is also what a folder watched before this list existed falls back to.
+   * Device-local, and excluded from cloud settings backups alongside
+   * {@link autoImportFolders}.
+   */
+  autoImportFlattenFolders?: string[];
 
-  // keepLogin removed: auth has been disabled.
-  // TODO: Re-add when talebook server authentication is connected.
+  // Retained for upstream settings schema compatibility. Moke does not use it
+  // to trigger Readest authentication redirects.
+  keepLogin: boolean;
+  // Readest Cloud is disabled in the Moke build, but retain this legacy field
+  // so existing local settings remain backward compatible.
   autoUpload: boolean;
   alwaysOnTop: boolean;
   openBookInNewWindow: boolean;
   autoCheckUpdates: boolean;
   updateChannel: 'stable' | 'nightly';
   screenWakeLock: boolean;
+  autohideCursor: boolean;
   screenBrightness: number;
   autoScreenBrightness: boolean;
   swipeBrightnessGesture: boolean;
@@ -378,11 +436,14 @@ export interface SystemSettings {
    * `false` the moment the user picks any primary sort in the menu.
    */
   librarySortByAuto: boolean;
-  librarySortBy2: LibrarySecondarySortByType;
+  libraryThenSortBy: LibrarySecondarySortByType;
+  /** Sort order of the secondary ("Then by") key, independent of `librarySortAscending` (#5119). */
+  libraryThenSortAscending: boolean;
   libraryGroupBy: LibraryGroupByType;
   libraryCoverFit: LibraryCoverFitType;
   libraryAutoColumns: boolean;
   libraryColumns: number;
+  librarySkeuomorphicCovers: boolean;
   /** Show the recently-read carousel at the top of the library (issue #3797). */
   libraryRecentShelfEnabled: boolean;
   /**
@@ -429,6 +490,7 @@ export interface SystemSettings {
   biometricUnlockEnabled?: boolean;
 
   kosync: KOSyncSettings;
+  bookorbit: BookOrbitSettings;
   talebook: TalebookSettings;
   readwise: ReadwiseSettings;
   hardcover: HardcoverSettings;
@@ -438,6 +500,7 @@ export interface SystemSettings {
   googleDrive: GoogleDriveSettings;
   s3: S3Settings;
   onedrive: OneDriveSettings;
+  icloud: ICloudSettings;
 
   aiSettings: AISettings;
   /**

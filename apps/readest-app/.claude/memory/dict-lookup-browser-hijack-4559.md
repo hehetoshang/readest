@@ -1,7 +1,7 @@
 ---
 name: dict-lookup-browser-hijack-4559
 description: Android system-dictionary lookup landing in the OEM browser instead of Eudic/欧路 — package-visibility + PROCESS_TEXT browser hijack
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5e397668-b766-439c-873c-00ccb1da715a

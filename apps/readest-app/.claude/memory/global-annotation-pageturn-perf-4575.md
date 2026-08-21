@@ -1,6 +1,6 @@
 ---
 name: global-annotation-pageturn-perf-4575
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 4640857e-9c37-4ec6-890a-8aa20ec3a3f3

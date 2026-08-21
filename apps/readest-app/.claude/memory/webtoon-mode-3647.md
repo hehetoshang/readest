@@ -1,7 +1,7 @@
 ---
 name: webtoon-mode-3647
 description: "Webtoon Mode (#3647) — seamless no-gap scrolled reading for image books; fixed-layout scroll-mode facts + submodule PR flow"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 4df24b79-87bd-4089-be36-fe30a0ba0a77

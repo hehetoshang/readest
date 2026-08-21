@@ -1,7 +1,7 @@
 ---
 name: edge-tts-webaudio-engine
 description: "Edge TTS Web Audio refactor (#3851/#2033) — gapless engine, WSOLA rate, section timeline + scrubber; branch feat/edge-tts-webaudio; release gates and design invariants"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 97e57af9-5961-4c92-a63e-4582178bf798

@@ -1,7 +1,7 @@
 ---
 name: android-image-callout-freeze
 description: "Android WebView native long-press image callout collides with app touch handlers and freezes the app; reusable `.no-context-menu` fix"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 50bec34f-7090-4bf4-a194-9bf4029527bf

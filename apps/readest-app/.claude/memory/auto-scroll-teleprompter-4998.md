@@ -1,7 +1,7 @@
 ---
 name: auto-scroll-teleprompter-4998
 description: "Auto Scroll teleprompter mode (#4998, PR#4999): PacedScroller core, useAutoScroll hook, control pill centered on gridcell, scrolled-mode-only View menu toggle"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 129a72a3-6d52-4f4c-a499-972c0055b4e3

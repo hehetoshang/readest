@@ -1,7 +1,7 @@
 ---
 name: koplugin-local-present-sweep-noop
 description: "koplugin lightScan stale-file sweep is a no-op — upsertBook OR-merges local_present so deleted books stay \"on device\" forever; user must delete readest_library.sqlite3"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 252d00e8-9934-47c9-82b9-f34fcb539e88

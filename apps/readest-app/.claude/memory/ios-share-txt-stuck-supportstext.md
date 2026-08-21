@@ -1,7 +1,7 @@
 ---
 name: ios-share-txt-stuck-supportstext
 description: iOS sharing a .txt to Readest hung the share sheet; Share Extension NSExtensionActivationSupportsText captured plain-text files
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 445ce295-90f6-4ed2-8227-e25b1e0a876d

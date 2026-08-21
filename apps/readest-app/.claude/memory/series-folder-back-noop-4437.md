@@ -1,6 +1,6 @@
 ---
 name: series-folder-back-noop-4437
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a2672a28-3bd3-4c6a-a595-f4d40d63ab50

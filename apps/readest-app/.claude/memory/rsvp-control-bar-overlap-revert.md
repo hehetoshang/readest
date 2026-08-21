@@ -1,7 +1,7 @@
 ---
 name: rsvp-control-bar-overlap-revert
 description: RSVP mobile control bar overlap was a REGRESSION — PR
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: cc658a96-fce5-4922-b924-361173c57e2a

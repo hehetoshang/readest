@@ -1,7 +1,7 @@
 ---
 name: window-state-sanitize-4398
 description: Windows launch crash (WebView2 0x80070057) from invalid .window-state.json; defensive sanitizer plugin
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 40a168fd-c90e-4f00-9fbc-7effe7c0c45f
