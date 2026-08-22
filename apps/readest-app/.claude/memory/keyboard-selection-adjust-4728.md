@@ -1,7 +1,7 @@
 ---
 name: keyboard-selection-adjust-4728
 description: "After a reader text selection, keystrokes land in the PARENT (container focus), not the iframe — fix Shift/Ctrl/Alt+Arrow selection refine in useBookShortcuts"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9ebaeccc-0436-4c7b-a81e-1a4aa3de64dd

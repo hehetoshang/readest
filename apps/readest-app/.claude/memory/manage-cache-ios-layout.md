@@ -1,7 +1,7 @@
 ---
 name: manage-cache-ios-layout
 description: "iOS app container layout and what the Manage Cache feature can/can't clear"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 3512356b-a453-42d3-99f6-1ca43d06dd1e

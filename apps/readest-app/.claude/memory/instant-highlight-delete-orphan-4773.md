@@ -1,7 +1,7 @@
 ---
 name: instant-highlight-delete-orphan-4773
 description: Deleting a just-made highlight leaves the overlay drawn (gone only after reopen); a stale memoized annotationIndex re-draws it
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 3a58d242-3867-414c-869a-95a23714b361

@@ -1,7 +1,7 @@
 ---
 name: calibre-custom-columns-4811
 description: "Surface Calibre custom columns from OPF user metadata (#4811) - parse formats, calibreColumns field, details UI, library search"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 7f74fc26-9614-4fe3-987b-66c8ce412523

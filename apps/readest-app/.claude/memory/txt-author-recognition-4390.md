@@ -1,6 +1,6 @@
 ---
 name: txt-author-recognition-4390
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: f151827f-0bf2-4307-ac92-e6077df54d19

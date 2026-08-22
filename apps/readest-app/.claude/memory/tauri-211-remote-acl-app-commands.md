@@ -1,7 +1,7 @@
 ---
 name: tauri-211-remote-acl-app-commands
 description: tauri 2.11 denies app commands from remote origins; webdriver tests need AppManifest + remote capability
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 953eb6c3-86a7-43e6-b56e-5b14f2eacb28

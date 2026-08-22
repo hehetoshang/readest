@@ -1,7 +1,7 @@
 ---
 name: tts-miniplayer-position-stacking
 description: TTS mini player mounts immediately and stacks above bottom bar / footer band / 16px resting offset (issue 5032) MERGED PR 5144
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5e4be60f-c98e-4061-a5e7-96b791b6da34

@@ -1,7 +1,7 @@
 ---
 name: foliate-touch-listener-capture-phase
 description: "To intercept/suppress reader touch gestures from the app, use capture-phase listeners — foliate-js's paginator registers bubble-phase doc listeners first"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 4b0bfcd2-a4ed-4b3c-99c2-b3c37ef7c530

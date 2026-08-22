@@ -1,7 +1,7 @@
 ---
 name: opds2-json-search-4502
 description: "OPDS 2.0 JSON catalog search bar greyed out; isSearchLink didn't recognize templated application/opds+json links"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9eb835a8-ce7a-4f80-ae3d-94e330935585

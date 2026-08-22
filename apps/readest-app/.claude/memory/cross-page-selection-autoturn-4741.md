@@ -1,7 +1,7 @@
 ---
 name: cross-page-selection-autoturn-4741
 description: Cross-page selection/highlight in paginated mode via extracted useAutoPageTurn; all four selection gestures drive the corner-dwell turn
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 33b70e98-fb55-467a-b03f-e4065491bc7e

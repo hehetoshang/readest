@@ -1,7 +1,7 @@
 ---
 name: fastlane-apple-appstore-submission
 description: "fastlane lanes for iOS/macOS App Store + TestFlight submission, and two gotchas (Tauri notarization trigger, fastlane cwd)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 6604c57a-dee4-4a6e-8624-540162f41a80

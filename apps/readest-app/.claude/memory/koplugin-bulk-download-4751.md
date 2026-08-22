@@ -1,7 +1,7 @@
 ---
 name: koplugin-bulk-download-4751
 description: "koplugin Library \"Download all books\" bulk download — entry point, candidate query, and the sync/async coroutine bridge"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: b474b24d-cfa5-4f32-b6f2-d6a35f27cadd

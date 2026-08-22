@@ -1,7 +1,7 @@
 ---
 name: duokan-fullscreen-cover-scroll
 description: "Duokan fullscreen cover image invisible in scrolled mode (#4379) — paginator pins it position:absolute height:100% which collapses against auto-height scroll container"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: c45aabf0-e8a3-42b6-a5fd-c04d6eb2345c

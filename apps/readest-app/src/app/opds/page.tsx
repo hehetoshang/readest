@@ -1,7 +1,6 @@
 'use client';
 
 import clsx from 'clsx';
-import { md5 } from 'js-md5';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { isOPDSCatalog, getPublication, getFeed, getOpenSearch } from 'foliate-js/opds.js';
@@ -33,6 +32,7 @@ import {
   isSearchLink,
   looksLikeXMLContent,
   MIME,
+  normalizeOpenSearchTemplates,
   parseMediaType,
   parseOPDSXML,
   resolveURL,
@@ -48,13 +48,15 @@ import { getPublicationDetailHref, parsePublicationDocument } from './utils/opds
 import { ImportError } from '@/services/errors';
 import { READEST_OPDS_USER_AGENT } from '@/services/constants';
 import { findBookByOPDSSources, upsertOPDSSourceMapping } from '@/services/opds/sourceMap';
+import { applyOPDSCover, getOPDSCoverHref, getOPDSImageCacheFilename } from '@/services/opds/cover';
+import { applyOPDSMetadata, getOPDSBookMetadata } from '@/services/opds/metadata';
 import { buildPseStreamFileName } from '@/services/opds/pseStream';
 import type { Book } from '@/types/book';
 import { FeedView } from './components/FeedView';
 import { PublicationView } from './components/PublicationView';
 import { SearchView } from './components/SearchView';
 import { Navigation } from './components/Navigation';
-import { normalizeOPDSCustomHeaders } from './utils/customHeaders';
+import { normalizeCustomHeaders } from '@/utils/customHeaders';
 import { closeOPDSBrowser, stashOPDSReturnTarget } from './utils/opdsClose';
 import { findExistingBookForPublication } from './utils/findExistingBook';
 import Dialog from '@/components/Dialog';
@@ -288,7 +290,7 @@ export default function BrowserPage() {
               addToHistory(url, newState, 'publication', null);
             }
           } else if (localName === 'OpenSearchDescription') {
-            const search = getOpenSearch(doc) as OPDSSearch;
+            const search = getOpenSearch(normalizeOpenSearchTemplates(doc)) as OPDSSearch;
             const newState = {
               search,
               baseURL: responseURL,
@@ -388,7 +390,7 @@ export default function BrowserPage() {
         usernameRef.current = null;
         passwordRef.current = null;
       }
-      customHeadersRef.current = normalizeOPDSCustomHeaders(catalog?.customHeaders);
+      customHeadersRef.current = normalizeCustomHeaders(catalog?.customHeaders);
       if (libraryLoaded) {
         lastLoadedKeyRef.current = loadKey;
         loadOPDS(url);
@@ -550,6 +552,8 @@ export default function BrowserPage() {
     };
   }, [basePublication, detailPublication]);
 
+  const publicationCoverHref = publication ? getOPDSCoverHref(publication) : undefined;
+
   const handleDownload = useCallback(
     async (
       href: string,
@@ -617,6 +621,30 @@ export default function BrowserPage() {
           const { library, setLibrary } = useLibraryStore.getState();
           try {
             const book = await appService.importBook(dstFilePath, library);
+            // The catalog's curated metadata wins over the file's embedded
+            // record (#5270) — applied before the cloud upload is queued so
+            // peers get the same fields. `publication` already carries the
+            // detail-document merge (#4749), so this is the fullest record.
+            if (book && publication) {
+              applyOPDSMetadata(book, getOPDSBookMetadata(publication));
+            }
+            // The catalog's own artwork wins over the one embedded in the file
+            // (#5270) — applied before the cloud upload is queued so peers get
+            // the same cover. Best effort: never fail the import over it.
+            if (book && publicationCoverHref) {
+              try {
+                await applyOPDSCover({
+                  appService,
+                  book,
+                  coverUrl: resolveURL(publicationCoverHref, state.baseURL),
+                  username,
+                  password,
+                  customHeaders,
+                });
+              } catch (coverError) {
+                console.warn('OPDS: failed to apply the feed cover:', coverError);
+              }
+            }
             if (book && catalogSourceId) {
               try {
                 await upsertOPDSSourceMapping(appService, {
@@ -628,13 +656,7 @@ export default function BrowserPage() {
                 console.error('OPDS: failed to update source map:', sourceMapError);
               }
             }
-            if (
-              user &&
-              book &&
-              !book.uploadedAt &&
-              settings.autoUpload &&
-              isReadestCloudStorageActive(settings)
-            ) {
+            if (user && book && !book.uploadedAt && isReadestCloudStorageActive(settings)) {
               setTimeout(() => {
                 transferManager.queueUpload(book);
               }, 3000);
@@ -652,7 +674,15 @@ export default function BrowserPage() {
         throw e;
       }
     },
-    [user, state.baseURL, appService, libraryLoaded, settings.autoUpload, catalogSourceId],
+    [
+      user,
+      state.baseURL,
+      appService,
+      libraryLoaded,
+      catalogSourceId,
+      publication,
+      publicationCoverHref,
+    ],
   );
 
   const handleStream = useCallback(
@@ -679,7 +709,7 @@ export default function BrowserPage() {
   );
 
   const handleGenerateCachedImageUrl = useCallback(
-    async (url: string) => {
+    async (url: string, cacheVersion?: string) => {
       if (!appService) return url;
       const username = usernameRef.current || '';
       const password = passwordRef.current || '';
@@ -688,7 +718,7 @@ export default function BrowserPage() {
         return needsProxy(url) ? getProxiedURL(url, '', true) : url;
       }
 
-      const cachedKey = `img_${md5(url)}.png`;
+      const cachedKey = getOPDSImageCacheFilename(url, cacheVersion);
       const cachePrefix = await appService.resolveFilePath('', 'Cache');
       const cachedPath = `${cachePrefix}/${cachedKey}`;
       if (await appService.exists(cachedPath, 'None')) {

@@ -1,7 +1,7 @@
 ---
 name: android-e2e-local-repro-workflow
 description: "How to reproduce/debug the Android CDP e2e lane locally - emulator + dev-android caveats (run-as needs debug build, stale gen/android bakes dev-server URL), app-side window.__atLog tracing, MIUI install restriction"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 353e9c4d-b3c6-4eeb-9bf1-8254615b2d3d

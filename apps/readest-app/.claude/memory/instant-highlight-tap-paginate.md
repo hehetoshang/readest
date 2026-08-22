@@ -1,7 +1,7 @@
 ---
 name: instant-highlight-tap-paginate
 description: Instant Highlight quick action swallowed tap/swipe-to-paginate on Android; fixed with a 300ms still-hold gate
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: d92c120f-6272-4366-92b8-e2d8f32dfd52

@@ -1,7 +1,7 @@
 ---
 name: tts-test-teardown-microtask-flake
 description: "Flaky vitest unhandled error: TTSController deferred queueMicrotask dispatch fires after jsdom teardown; Node global CustomEvent rejected by jsdom EventTarget"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a1862d1a-c5cd-4b21-aed7-62a3290222ba

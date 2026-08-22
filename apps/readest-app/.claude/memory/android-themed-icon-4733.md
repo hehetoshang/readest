@@ -1,7 +1,7 @@
 ---
 name: android-themed-icon-4733
 description: "Android Material-You themed (monochrome) launcher icon — restoring it (#4733), the gen/android force-commit pipeline, and emulator verification"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 6bc82dac-a705-4ef2-ab28-c13b43f48a46

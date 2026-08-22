@@ -1,7 +1,7 @@
 ---
 name: dark-mode-texture-body-bg-4446
 description: "#4446 dark-mode bg texture occluded by body.theme-dark opaque bg !important (style.ts getDarkModeLightBackgroundOverrides); verified on Xiaomi via CDP; multiview = patch ALL section iframes"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 61f864c0-488e-466c-89e9-86df66b57d42

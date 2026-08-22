@@ -1,7 +1,7 @@
 ---
 name: review-perf-slice-not-quadratic
 description: "Don't claim str.slice(i) in a loop is O(n^2) — V8 SlicedString makes it O(1); isolate the variable before reporting any perf finding"
-metadata: 
+metadata:
   node_type: memory
   type: feedback
   originSessionId: 6c867dae-8902-43e4-ac52-ab0d7ed83f88

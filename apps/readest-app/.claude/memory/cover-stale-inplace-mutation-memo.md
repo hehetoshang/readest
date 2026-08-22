@@ -1,7 +1,7 @@
 ---
 name: cover-stale-inplace-mutation-memo
 description: Library cover (or any memoized child) not updating until refresh — in-place object mutation defeats React.memo
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: ec78c172-79e7-448c-8671-780dcc115613

@@ -1,7 +1,7 @@
 ---
 name: dict-popup-font-size-4443
 description: Adjustable dictionary popup font size via ::part() + em-rebasing; the only cross-shadow font hook for MDict
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: b105ba93-61b7-4d28-a269-1201a7be89bd

@@ -1,7 +1,7 @@
 ---
 name: mobile-reading-widgets
 description: "Home-screen reading widgets (#1602, PR"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 7f7f8218-4656-4863-972e-ea6204c130fa

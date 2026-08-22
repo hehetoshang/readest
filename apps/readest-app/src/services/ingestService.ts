@@ -35,7 +35,7 @@ export interface IngestFileOptions {
   groupName?: string;
   /** Tag parsed from a Send-to-Readest email subject (`#scifi`). */
   subjectTag?: string;
-  /** Upload to the cloud even when the user has disabled autoUpload. */
+  /** Upload to the cloud even when the user has turned off book sync. */
   forceUpload?: boolean;
   /** Transient import (not stored long-term) — never uploaded. */
   transient?: boolean;
@@ -226,11 +226,15 @@ export async function ingestFile(
     if (!tags.includes(tag)) {
       book.tags = [...tags, tag];
       book.updatedAt = Date.now();
+      // Tags merge on the metadata clock (#5438); stamp it or a peer's older
+      // stamped metadata edit would win the group and drop this tag.
+      book.metadataUpdatedAt = book.updatedAt;
     }
   }
 
   // Sent books force the upload so they reach the user's other devices even
-  // when autoUpload is off; normal library imports honor the setting.
+  // when book sync is off; normal library imports honor the Manage Sync
+  // "book" toggle, which defaults on — upload unless the user turns it off.
   // Transient imports are never uploaded — they're short-lived previews
   // (e.g. /send view) and shouldn't pollute the user's cloud library.
   // In-place imports (book.filePath set, content under one of the user's
@@ -247,7 +251,7 @@ export async function ingestFile(
     !opts.transient &&
     isLoggedIn &&
     !book.uploadedAt &&
-    (opts.forceUpload || settings.autoUpload) &&
+    (opts.forceUpload || settings.syncCategories?.book !== false) &&
     isReadestCloudStorageActive(settings)
   ) {
     transferManager.queueUpload(book);

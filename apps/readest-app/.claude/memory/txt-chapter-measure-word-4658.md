@@ -1,7 +1,7 @@
 ---
 name: txt-chapter-measure-word-4658
 description: TXT import detected 第一封信/第四本书 (量词 prose) as chapters; split units into strong vs weak (separator-required)
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: c0199d69-f314-45ee-bf7c-867b908641cc

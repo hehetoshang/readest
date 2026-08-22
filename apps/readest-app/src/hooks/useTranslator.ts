@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from 'react';
-import { streamText } from 'ai';
 import { useAuth } from '@/context/AuthContext';
 import {
   ErrorCodes,
@@ -16,7 +15,6 @@ import { getLocale } from '@/utils/misc';
 import { useTranslation } from './useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { AI_PROVIDER_ID, isAIAskEnabled, parseAIAnswer } from '@/services/ai/aiAsk';
-import { getAIProvider } from '@/services/ai/providers';
 import { TRANSLATOR_LANGS } from '@/services/constants';
 
 export function useTranslator({
@@ -71,6 +69,12 @@ export function useTranslator({
         throw new Error('AI not configured');
       }
       const targetLangName = TRANSLATOR_LANGS[targetLanguage] || targetLanguage || '中文';
+      // Keep the AI SDK/provider graph out of ordinary translation and reader
+      // utility bundles; some providers include server-only OIDC helpers.
+      const [{ streamText }, { getAIProvider }] = await Promise.all([
+        import('ai'),
+        import('@/services/ai/providers'),
+      ]);
       const aiProvider = getAIProvider(aiSettings!);
       const system = `请将以下文字翻译成${targetLangName}，只输出译文，不要附加任何说明、解释或引号：`;
       return Promise.all(

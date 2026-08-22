@@ -160,6 +160,7 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
           file: book.filePath,
           moke: '1',
           mokeEink: settings.globalViewSettings?.isEink ? '1' : '0',
+          mokeDebug: window.__MOKE_DEBUG_PANEL ? '1' : '0',
         });
         if (mokeBookId) params.set('mokeBookId', mokeBookId);
         if (serverUrl) params.set('mokeServerUrl', serverUrl);
@@ -178,6 +179,7 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
       await invoke('open_reader', {
         filePath: book.filePath,
         eink: settings.globalViewSettings?.isEink ?? false,
+        debugPanel: window.__MOKE_DEBUG_PANEL ?? false,
         mokeBookId,
       });
     } catch (error) {

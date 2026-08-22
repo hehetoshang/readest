@@ -1,7 +1,7 @@
 ---
 name: tts-highlight-granularity-setting
 description: TTS highlight granularity (word/sentence) user setting and its two-point gating in TTSController
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 33ddd196-7404-4af2-99ac-0d3b19b39b4e

@@ -1,7 +1,7 @@
 ---
 name: select-mode-actions-overlap-last-book-5175
 description: "#5175 list-mode select bar hides last book; measure bar height into Virtuoso Footer spacer"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: e9a706a9-3417-4bf5-9369-8e34fcc3735d

@@ -1,7 +1,7 @@
 ---
 name: webdav-connect-nullified-4780
 description: "WebDAV connection lost after app restart (#4780) — useSync pull finally saved stale closure settings"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5a1fa597-f371-4023-a342-2b04a4ad5cd5
