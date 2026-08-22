@@ -1,7 +1,7 @@
 ---
 name: paginator-swipe-bg-flash
 description: Swipe page-turn background flash —
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 374255ae-fbfd-4933-bc47-555e541fa115

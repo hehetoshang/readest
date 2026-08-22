@@ -1,7 +1,7 @@
 ---
 name: opds-html-description-4503
 description: "OPDS publication descriptions showed raw HTML tags; double-escaped type=\"text\" summaries + unsanitized innerHTML; fix decodes-if-fully-escaped then sanitizes"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 73fd2a21-ea89-4cdb-bbbd-23256a6ae5a2

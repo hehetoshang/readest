@@ -1,7 +1,7 @@
 ---
 name: i18n-extract-prunes-keys
 description: "pnpm i18n:extract (removeUnusedKeys) deletes valid keys not statically in the branch; don't commit that churn"
-metadata: 
+metadata:
   node_type: memory
   type: feedback
   originSessionId: afe50e44-d394-4301-bd81-1368df66f90b

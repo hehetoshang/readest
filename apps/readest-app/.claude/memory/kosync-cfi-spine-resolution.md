@@ -1,7 +1,7 @@
 ---
 name: kosync-cfi-spine-resolution
 description: "KOSync CFI↔XPointer conversion must resolve via the CFI's own spine index, not the paginator's primaryIndex (which lags during scroll)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 41b15d60-969d-4173-9db7-d1515721e527

@@ -1,7 +1,7 @@
 ---
 name: pdf-scroll-lag-preload-4795
 description: "PDF scrolled-mode rendering lag on Android (#4795/#4031) — fix via widened preload margin + bounded prioritized load scheduler in fixed-layout.js"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 902324ba-94ee-4c88-804e-ea9f796681f9

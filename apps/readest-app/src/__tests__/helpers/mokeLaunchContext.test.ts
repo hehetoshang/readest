@@ -40,6 +40,14 @@ describe('bootstrapMokeLaunchContext', () => {
     expect(window.__MOKE_RESTORE_PROGRESS).toMatchObject({ location: 'epubcfi(/6/8)' });
   });
 
+  it('forwards the Moke debug panel launch flag', () => {
+    window.history.replaceState({}, '', '/reader?moke=1&mokeDebug=1&mokeBookId=42');
+
+    bootstrapMokeLaunchContext();
+
+    expect(window.__MOKE_DEBUG_PANEL).toBe(true);
+  });
+
   it('prefers a newer local snapshot over stale server progress in the URL', () => {
     const serverUrl = 'http://192.168.1.5:8080';
     localStorage.setItem(

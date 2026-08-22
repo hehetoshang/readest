@@ -1,7 +1,7 @@
 ---
 name: pdf-swipe-pan-toggles-menu-5142
 description: "#5142 PDF fit-width landscape: vertical pan swipe toggled control menu — gate swipe-up bar toggle on hasVerticalPanning (real isOverflowY), not zoomLevel>100"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 0850b532-e636-4efa-95cf-f63b38ca8762

@@ -1,7 +1,7 @@
 ---
 name: opds-groups-carousel-4750
 description: OPDS feed groups (>=2) render as horizontal virtualized carousels with lazy cover loading
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 3073b2b0-8219-42cc-8e3f-547715b86b01

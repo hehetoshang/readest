@@ -1,7 +1,7 @@
 ---
 name: cdp-android-webview-profiling
 description: "How to drive the Android WebView via CDP (adb) to run JS probes/benchmarks inside the live Readest app, and the gotchas that waste time"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 8057ac9c-2e3e-446d-86aa-29baddfbfe66

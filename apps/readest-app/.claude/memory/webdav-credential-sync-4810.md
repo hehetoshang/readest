@@ -1,7 +1,7 @@
 ---
 name: webdav-credential-sync-4810
 description: "WebDAV credentials weren't synced cross-device; add to settings whitelist + encrypted fields + mergeSettings deep-merge"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 1a4937d3-05a4-4e1e-b917-d56304b66f2b

@@ -161,31 +161,12 @@ describe('navigateToReader', () => {
 });
 
 describe('navigateToLogin', () => {
-  test('navigates to /auth with redirect from current path', () => {
-    Object.defineProperty(window, 'location', {
-      value: { pathname: '/library', search: '?q=test' },
-      writable: true,
-    });
-
+  test('does not expose the removed Readest account route in Moke', () => {
     const router = mockRouter();
+
     navigateToLogin(router);
 
-    const url = router.push.mock.calls[0]![0] as string;
-    expect(url).toContain('/auth?redirect=');
-    expect(url).toContain(encodeURIComponent('/library?q=test'));
-  });
-
-  test('uses / as redirect when already on /auth', () => {
-    Object.defineProperty(window, 'location', {
-      value: { pathname: '/auth', search: '' },
-      writable: true,
-    });
-
-    const router = mockRouter();
-    navigateToLogin(router);
-
-    const url = router.push.mock.calls[0]![0] as string;
-    expect(url).toBe('/auth?redirect=%2F');
+    expect(router.push).not.toHaveBeenCalled();
   });
 });
 
@@ -324,13 +305,31 @@ describe('showReaderWindow', () => {
     expect(url).toContain('ids=book1%2Bbook2');
   });
 
+  test('preserves the exact CFI and transient highlight in the reader window URL', () => {
+    const appService = makeAppService();
+    const cfi = 'epubcfi(/6/2!/4/2:1)';
+    showReaderWindow(
+      appService as never,
+      ['book1'],
+      `cfi=${encodeURIComponent(cfi)}&highlight=search`,
+    );
+
+    const url = vi.mocked(WebviewWindow).mock.calls[0]![1]!.url as string;
+    const params = new URLSearchParams(url.split('?')[1]);
+    expect(params.get('ids')).toBe('book1');
+    expect(params.get('cfi')).toBe(cfi);
+    expect(params.get('highlight')).toBe('search');
+  });
+
   test('uses macOS-specific window options', () => {
     const appService = makeAppService(true);
     showReaderWindow(appService as never, ['book1']);
 
     const constructorCall = vi.mocked(WebviewWindow).mock.calls[0]!;
     const options = constructorCall[1]!;
-    expect(options.title).toBe('');
+    // The overlay title bar hides its title text natively, so the window is
+    // named like every other platform's.
+    expect(options.title).toBe('Readest');
     expect(options.decorations).toBe(true);
     expect(options.titleBarStyle).toBe('overlay');
   });

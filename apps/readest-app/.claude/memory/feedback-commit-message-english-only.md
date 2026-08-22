@@ -1,7 +1,7 @@
 ---
 name: feedback-commit-message-english-only
 description: "Commit messages (and PR titles) must be English-only — no CJK characters, no em/en dashes"
-metadata: 
+metadata:
   node_type: memory
   type: feedback
   originSessionId: c0199d69-f314-45ee-bf7c-867b908641cc

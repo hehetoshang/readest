@@ -1,7 +1,7 @@
 ---
 name: empty-highlight-leak-on-annotate-cancel-4791
 description: Annotate eagerly creates a highlight placeholder; cancelling the note must tear it down
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 1c75c865-8e1b-4641-ac20-81692d3ff20b

@@ -1,7 +1,7 @@
 ---
 name: opds-self-link-metadata-4749
 description: OPDS 2.0 summary publications need self-link dereference for full metadata; JSON description is HTML
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 0e1e6ec0-38c1-45a2-aab6-52b78a5ad38a

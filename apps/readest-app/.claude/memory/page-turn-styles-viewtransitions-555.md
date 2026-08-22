@@ -1,7 +1,7 @@
 ---
 name: page-turn-styles-viewtransitions-555
 description: "#555 slide/curl page-turn styles via View Transitions — snapshot layering, shadow-DOM name scoping, margin clip, scrubbed drag tracking"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 91cbce94-0703-478d-9671-b12629fd8d9f

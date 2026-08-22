@@ -31,7 +31,7 @@ import { optInTelemetry, optOutTelemetry } from '@/utils/telemetry';
 const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset }) => {
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
-  const { getView, getViewSettings, recreateViewer } = useReaderStore();
+  const { getView, getViews, getViewSettings, recreateViewer } = useReaderStore();
   const { getBookData } = useBookDataStore();
   const { settings } = useSettingsStore();
   const { applyEinkMode } = useEinkMode();
@@ -67,6 +67,7 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
     settings.swipeBrightnessGesture,
   );
   const [screenWakeLock, setScreenWakeLock] = useState(settings.screenWakeLock);
+  const [autohideCursor, setAutohideCursor] = useState(settings.autohideCursor);
   const [allowScript, setAllowScript] = useState(viewSettings.allowScript);
   const [isTelemetryEnabled, setIsTelemetryEnabled] = useState(settings.telemetryEnabled);
 
@@ -130,6 +131,12 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
       `${getMaxInlineSize(viewSettings)}px`,
     );
     getView(bookKey)?.renderer.setStyles?.(getStyles(viewSettings!));
+    // `scrolled` decides which engine owns a swipe, so it has to push the turn
+    // attributes through like every other input to that decision. Left stale,
+    // the paginator keeps `turn-style`/no `no-swipe` from scroll flow and
+    // animates the swipe itself while the interceptor — which recomputes
+    // eligibility live — runs a captured turn over the top: three pages slide.
+    applyTurnAttributes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isScrolledMode]);
 
@@ -257,6 +264,13 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
   }, [screenWakeLock]);
 
   useEffect(() => {
+    if (autohideCursor === settings.autohideCursor) return;
+    saveSysSettings(envConfig, 'autohideCursor', autohideCursor);
+    getViews().forEach((view) => view?.toggleAttribute('autohide-cursor', autohideCursor));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autohideCursor]);
+
+  useEffect(() => {
     if (viewSettings.allowScript === allowScript) return;
     saveViewSettings(envConfig, bookKey, 'allowScript', allowScript, true, false).then(() => {
       recreateViewer(envConfig, bookKey);
@@ -328,7 +342,6 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
         <SettingsSwitchRow
           label={_('Scrolled Mode')}
           checked={isScrolledMode}
-          disabled={bookData?.isFixedLayout}
           onChange={() => setScrolledMode(!isScrolledMode)}
         />
         <SettingsSwitchRow
@@ -497,6 +510,15 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
           onChange={() => setScreenWakeLock(!screenWakeLock)}
           data-setting-id='settings.control.screenWakeLock'
         />
+        {!appService?.isMobile && (
+          <SettingsSwitchRow
+            label={_('Auto-hide Cursor')}
+            description={_('After a moment of inactivity')}
+            checked={autohideCursor}
+            onChange={() => setAutohideCursor(!autohideCursor)}
+            data-setting-id='settings.control.autohideCursor'
+          />
+        )}
       </BoxedList>
 
       <BoxedList title={_('Security')} data-setting-id='settings.control.allowJavascript'>

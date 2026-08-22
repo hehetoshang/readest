@@ -1,7 +1,7 @@
 ---
 name: progressbar-focus-ring-4397
 description: ProgressBar footer painted a stray focus-ring line on Android long-press; fix = remove tabIndex from the decorative div
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 7d650c44-2d60-4a88-a9f5-6b5956bca59b

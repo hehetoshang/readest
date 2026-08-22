@@ -1,7 +1,7 @@
 ---
 name: tauri-parser-parity-tests
 description: "How to test the native Rust EPUB/MOBI parser against foliate-js in the Tauri WebView suite, plus the dcterms:modified→published parity gotcha"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 90d14df3-59ce-438f-ae91-b72e9d2b6f99

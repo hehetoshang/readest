@@ -44,6 +44,9 @@ import type { FetchFn, TokenSet } from './tokenEndpoint';
  * removed with the account system). The export is kept so the (also-disabled)
  * OneDrive/Drive connectors still type-check; it throws if ever invoked.
  */
-export const runAndroidOAuth = (_config: OAuthClientConfig, _fetchFn: FetchFn): Promise<TokenSet> => {
+export const runAndroidOAuth = (
+  _config: OAuthClientConfig,
+  _fetchFn: FetchFn,
+): Promise<TokenSet> => {
   throw new Error('runAndroidOAuth is disabled in Moke (cloud sync removed)');
 };

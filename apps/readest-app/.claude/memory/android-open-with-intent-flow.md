@@ -1,7 +1,7 @@
 ---
 name: android-open-with-intent-flow
 description: "Android \"Open with/Send to Readest\" intent pipeline + why Telegram/cloud-app opens differ from file-manager opens (issue"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 73ee84b7-27a0-4232-981c-de8235a15f07

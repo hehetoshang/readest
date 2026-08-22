@@ -1,7 +1,7 @@
 ---
 name: backup-windows-zip-paths-4703
 description: Backup zip exported on Windows failed to restore anywhere — backslash separators in zip entry names
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: dd015419-996e-466b-8039-f2d98312d9d6

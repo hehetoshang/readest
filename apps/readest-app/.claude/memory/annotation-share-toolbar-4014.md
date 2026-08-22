@@ -1,7 +1,7 @@
 ---
 name: annotation-share-toolbar-4014
 description: "Share intent in the selection toolbar + drag-and-drop toolbar customizer (#4014)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 507a0166-cb55-4f33-b633-3230c0c514ff

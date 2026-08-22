@@ -1,7 +1,7 @@
 ---
 name: eink-screen-refresh-pageturner-4687
 description: "Page-turner \"Refresh Page\" action that deep-refreshes the e-ink panel (clear ghosting) on Android, via generic reflection across BOOX/Tolino/Rockchip"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 742b1517-392b-4735-8355-32b57fbfa400

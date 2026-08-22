@@ -1,7 +1,7 @@
 ---
 name: android-nativefile-remotefile-io
 description: "Why NativeFile is slow on Android, why RemoteFile (range fetch) can't replace it (asset-protocol Range is broken), measured CDP numbers, and the viable speedups"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 8057ac9c-2e3e-446d-86aa-29baddfbfe66

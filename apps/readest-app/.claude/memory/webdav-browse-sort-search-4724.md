@@ -1,7 +1,7 @@
 ---
 name: webdav-browse-sort-search-4724
 description: "WebDAV browser sort + search feature (#4724, PR"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 0b4c38bb-34ca-4446-a77a-cd967f88b40e

@@ -1,7 +1,7 @@
 ---
 name: booknote-view-autoscroll-4352
 description: "Annotation/bookmark list (BooknoteView) auto-scroll-to-nearest regression after virtualization (#4352) and its TOCView-mirroring fix"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: bda988b9-28ec-450f-874e-ee9c104f7603
