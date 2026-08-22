@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { convertBlobUrlToDataUrl, BookDoc, getDirection } from '@/libs/document';
 import { BOOK_IDS_SEPARATOR } from '@/services/constants';
+import { enforceBookResourcePolicy } from '@/services/bookContentSecurity';
 import { BookConfig, PageInfo } from '@/types/book';
 import { FoliateView, wrappedFoliateView } from '@/types/view';
 import { Insets } from '@/types/misc';
@@ -62,7 +63,6 @@ import {
 } from '../utils/iframeEventHandlers';
 import { getMaxInlineSize } from '@/utils/config';
 import { getDirFromUILanguage } from '@/utils/rtl';
-import { isTauriAppPlatform } from '@/services/environment';
 import { TransformContext } from '@/services/transformers/types';
 import { transformContent } from '@/services/transformService';
 import { lockScreenOrientation, setTextSelectionSuppressed } from '@/utils/bridge';
@@ -94,12 +94,6 @@ import {
   getTTSMiniPlayerBottomOffset,
   TTS_MINI_PLAYER_HEIGHT,
 } from '../utils/ttsMiniPlayerPosition';
-
-declare global {
-  interface Window {
-    eval(script: string): void;
-  }
-}
 
 const FoliateViewer: React.FC<{
   bookKey: string;
@@ -276,7 +270,8 @@ const FoliateViewer: React.FC<{
           if (viewSettings && detail.type === 'text/css')
             return transformStylesheet(data, width, height, viewSettings.vertical);
           const isHtml = detail.type === 'application/xhtml+xml' || detail.type === 'text/html';
-          if (viewSettings && bookData && isHtml) {
+          const isSvg = detail.type === 'image/svg+xml';
+          if (viewSettings && bookData && (isHtml || isSvg)) {
             const ctx: TransformContext = {
               bookKey,
               viewSettings,
@@ -286,19 +281,22 @@ const FoliateViewer: React.FC<{
               primaryLanguage: bookData.book?.primaryLanguage,
               userLocale: getLocale(),
               content: data,
+              contentType: detail.type,
               sectionHref: detail.name,
-              transformers: [
-                'style',
-                'punctuation',
-                'footnote',
-                'whitespace',
-                'language',
-                'sanitizer',
-                'simplecc',
-                'nbsp',
-                'proofread',
-                'warichu',
-              ],
+              transformers: isSvg
+                ? ['sanitizer']
+                : [
+                    'style',
+                    'punctuation',
+                    'footnote',
+                    'whitespace',
+                    'language',
+                    'sanitizer',
+                    'simplecc',
+                    'nbsp',
+                    'proofread',
+                    'warichu',
+                  ],
             };
             return Promise.resolve(transformContent(ctx));
           }
@@ -386,11 +384,6 @@ const FoliateViewer: React.FC<{
         skipToNextSectionLabel: _('End of this section. Continue to the next.'),
       });
 
-      // Inline scripts in tauri platforms are not executed by default
-      if (viewSettings.allowScript && isTauriAppPlatform()) {
-        evalInlineScripts(detail.doc);
-      }
-
       // only call on load if we have highlighting turned on.
       if (viewSettings.codeHighlighting) {
         manageSyntaxHighlighting(detail.doc, viewSettings);
@@ -439,22 +432,6 @@ const FoliateViewer: React.FC<{
         registerBrightnessListeners(detail.doc);
         registerSpeedListeners(detail.doc);
       }
-    }
-  };
-
-  const evalInlineScripts = (doc: Document) => {
-    if (doc.defaultView && doc.defaultView.frameElement) {
-      const iframe = doc.defaultView.frameElement as HTMLIFrameElement;
-      const scripts = doc.querySelectorAll('script:not([src])');
-      scripts.forEach((script, index) => {
-        const scriptContent = script.textContent || script.innerHTML;
-        try {
-          console.warn('Evaluating inline scripts in iframe');
-          iframe.contentWindow?.eval(scriptContent);
-        } catch (error) {
-          console.error(`Error executing iframe script ${index + 1}:`, error);
-        }
-      });
     }
   };
 
@@ -709,9 +686,7 @@ const FoliateViewer: React.FC<{
           url?: string;
           allow?: boolean;
         }>;
-        if (detail.isScript) {
-          detail.allow = viewSettings.allowScript ?? false;
-        }
+        enforceBookResourcePolicy(detail);
         if (isFontType(detail.type) && detail.href?.startsWith('fonts/')) {
           const fontFileName = detail.href.split('/').pop()?.toLowerCase();
           getAvailableFonts().forEach(async (font) => {

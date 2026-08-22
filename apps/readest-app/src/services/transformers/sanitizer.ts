@@ -10,10 +10,25 @@ export const sanitizerTransformer: Transformer = {
   name: 'sanitizer',
 
   transform: async (ctx) => {
-    const allowScript = ctx.viewSettings.allowScript;
-    if (allowScript) return ctx.content;
-
     const result = ctx.content.replaceAll('&nbsp;', '&#160;');
+
+    // Foliate must retain same-origin DOM access for pagination, selection,
+    // annotations, and TTS. Scripted publication content therefore cannot be
+    // isolated safely and is always removed, including from legacy configs
+    // that still contain allowScript=true.
+    if (ctx.contentType === 'image/svg+xml') {
+      const doc = new DOMParser().parseFromString(result, 'image/svg+xml');
+      if (doc.querySelector('parsererror')) throw new Error('Invalid SVG publication content');
+      DOMPurify.sanitize(doc.documentElement, {
+        IN_PLACE: true,
+        USE_PROFILES: { svg: true, svgFilters: true },
+        FORBID_TAGS: ['script', 'iframe', 'object', 'embed'],
+        FORBID_ATTR: ['srcdoc'],
+        ALLOWED_URI_REGEXP:
+          /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|blob|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+      });
+      return '<?xml version="1.0" encoding="utf-8"?>' + new XMLSerializer().serializeToString(doc);
+    }
 
     const sanitized = DOMPurify.sanitize(result, {
       WHOLE_DOCUMENT: true,

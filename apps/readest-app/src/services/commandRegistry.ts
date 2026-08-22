@@ -496,12 +496,6 @@ const controlPanelItems = [
     keywords: ['screen', 'wake', 'lock', 'awake', 'sleep', 'display'],
     section: 'Device',
   },
-  {
-    id: 'settings.control.allowJavascript',
-    labelKey: _('Allow JavaScript'),
-    keywords: ['javascript', 'js', 'script', 'security', 'allow'],
-    section: 'Security',
-  },
 ];
 
 // language panel items
