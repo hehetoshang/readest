@@ -1,10 +1,13 @@
 import DOMPurify from 'dompurify';
+import { normalizeBookContentType } from '@/services/bookContentSecurity';
 import type { Transformer } from './types';
 // import { diff } from '@/utils/diff';
 
 const DOCTYPE_XHTML11 = `<!DOCTYPE html PUBLIC
 "-//W3C//DTD XHTML 1.1//EN"
 "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">`;
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+const EMPTY_SVG_DOCUMENT = `<?xml version="1.0" encoding="utf-8"?><svg xmlns="${SVG_NAMESPACE}"></svg>`;
 
 export const sanitizerTransformer: Transformer = {
   name: 'sanitizer',
@@ -20,9 +23,15 @@ export const sanitizerTransformer: Transformer = {
     // annotations, and TTS. Scripted publication content therefore cannot be
     // isolated safely and is always removed, including from legacy configs
     // that still contain allowScript=true.
-    if (ctx.contentType === 'image/svg+xml') {
+    if (normalizeBookContentType(ctx.contentType) === 'image/svg+xml') {
       const doc = new DOMParser().parseFromString(result, 'image/svg+xml');
-      if (doc.querySelector('parsererror')) throw new Error('Invalid SVG publication content');
+      if (
+        doc.querySelector('parsererror') ||
+        doc.documentElement.localName !== 'svg' ||
+        doc.documentElement.namespaceURI !== SVG_NAMESPACE
+      ) {
+        return EMPTY_SVG_DOCUMENT;
+      }
       DOMPurify.sanitize(doc.documentElement, {
         IN_PLACE: true,
         USE_PROFILES: { svg: true, svgFilters: true },

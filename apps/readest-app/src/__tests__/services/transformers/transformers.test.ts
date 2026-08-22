@@ -678,14 +678,14 @@ describe('sanitizerTransformer', () => {
     expect(result).toContain('<p>Hello</p>');
   });
 
-  test('sanitizes standalone SVG documents without changing the root element', async () => {
+  test('sanitizes standalone SVG documents with a case-variant parameterized MIME type', async () => {
     const svg =
       '<?xml-stylesheet type="text/css" href="page.css"?>' +
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 20">' +
       '<script>parent.__TAURI_INTERNALS__.invoke("evil")</script>' +
       '<rect width="10" height="20" onload="parent.pwn()"/></svg>';
     const result = await sanitizerTransformer.transform(
-      makeCtx({ content: svg, contentType: 'image/svg+xml' }),
+      makeCtx({ content: svg, contentType: ' Image/SVG+XML ; charset=utf-8 ' }),
     );
     expect(result).toMatch(/^<\?xml version="1\.0" encoding="utf-8"\?>/);
     expect(result).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
@@ -693,6 +693,32 @@ describe('sanitizerTransformer', () => {
     expect(result).not.toContain('onload');
     expect(result).toContain('<?xml-stylesheet type="text/css" href="page.css"?>');
     expect(result).toContain('viewBox="0 0 10 20"');
+  });
+
+  test('fails closed with an empty SVG when publication SVG is malformed', async () => {
+    const result = await sanitizerTransformer.transform(
+      makeCtx({
+        content: '<svg xmlns="http://www.w3.org/2000/svg"><script>parent.pwn()</script><g></svg>',
+        contentType: 'image/svg+xml',
+      }),
+    );
+
+    expect(result).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
+    expect(result).not.toContain('<script');
+    expect(result).not.toContain('parent.pwn');
+  });
+
+  test('fails closed when SVG MIME content has a non-SVG root', async () => {
+    const result = await sanitizerTransformer.transform(
+      makeCtx({
+        content: '<html><body><script>parent.pwn()</script></body></html>',
+        contentType: 'image/svg+xml',
+      }),
+    );
+
+    expect(result).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
+    expect(result).not.toContain('<script');
+    expect(result).not.toContain('parent.pwn');
   });
 
   test('sanitizes content when allowScript is false', async () => {

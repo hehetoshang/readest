@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { convertBlobUrlToDataUrl, BookDoc, getDirection } from '@/libs/document';
 import { BOOK_IDS_SEPARATOR } from '@/services/constants';
-import { enforceBookResourcePolicy } from '@/services/bookContentSecurity';
+import { enforceBookResourcePolicy, getBookContentPolicy } from '@/services/bookContentSecurity';
 import { BookConfig, PageInfo } from '@/types/book';
 import { FoliateView, wrappedFoliateView } from '@/types/view';
 import { Insets } from '@/types/misc';
@@ -271,43 +271,53 @@ const FoliateViewer: React.FC<{
     return (event: Event) => {
       const { detail } = event as CustomEvent;
       detail.data = Promise.resolve(detail.data)
-        .then((data) => {
+        .then(async (data) => {
+          const policy = getBookContentPolicy(detail.type, detail.name);
+          if (policy.kind === 'reject') return '';
+          if (policy.kind === 'passthrough') return data;
+
           const viewSettings = getViewSettings(bookKey);
-          const bookData = getBookData(bookKey);
-          if (viewSettings && detail.type === 'text/css')
-            return transformStylesheet(data, width, height, viewSettings.vertical);
-          const isHtml = detail.type === 'application/xhtml+xml' || detail.type === 'text/html';
-          const isSvg = detail.type === 'image/svg+xml';
-          if (viewSettings && bookData && (isHtml || isSvg)) {
-            const ctx: TransformContext = {
-              bookKey,
-              viewSettings,
-              width,
-              height,
-              isFixedLayout: bookData.isFixedLayout,
-              primaryLanguage: bookData.book?.primaryLanguage,
-              userLocale: getLocale(),
-              content: data,
-              contentType: detail.type,
-              sectionHref: detail.name,
-              transformers: isSvg
-                ? ['sanitizer']
-                : [
-                    'style',
-                    'punctuation',
-                    'footnote',
-                    'whitespace',
-                    'language',
-                    'sanitizer',
-                    'simplecc',
-                    'nbsp',
-                    'proofread',
-                    'warichu',
-                  ],
-            };
-            return Promise.resolve(transformContent(ctx));
+          const text =
+            typeof data === 'string' ? data : data instanceof Blob ? await data.text() : null;
+          if (text === null) return '';
+
+          detail.type = policy.contentType;
+          if (policy.kind === 'stylesheet') {
+            return viewSettings
+              ? transformStylesheet(text, width, height, viewSettings.vertical)
+              : text;
           }
-          return data;
+
+          const bookData = getBookData(bookKey);
+          if (!viewSettings || !bookData) return '';
+          const isSvg = policy.contentType === 'image/svg+xml';
+          const ctx: TransformContext = {
+            bookKey,
+            viewSettings,
+            width,
+            height,
+            isFixedLayout: bookData.isFixedLayout,
+            primaryLanguage: bookData.book?.primaryLanguage,
+            userLocale: getLocale(),
+            content: text,
+            contentType: policy.contentType,
+            sectionHref: detail.name,
+            transformers: isSvg
+              ? ['sanitizer']
+              : [
+                  'style',
+                  'punctuation',
+                  'footnote',
+                  'whitespace',
+                  'language',
+                  'sanitizer',
+                  'simplecc',
+                  'nbsp',
+                  'proofread',
+                  'warichu',
+                ],
+          };
+          return transformContent(ctx);
         })
         .catch((e) => {
           console.error(new Error(`Failed to load ${detail.name}`, { cause: e }));
