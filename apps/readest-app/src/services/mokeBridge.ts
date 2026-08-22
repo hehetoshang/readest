@@ -32,9 +32,11 @@ async function resolveInvoke() {
 function _doEmit(event: string, data: Record<string, unknown>): Promise<void> {
   return resolveInvoke().then((invoke) => {
     if (!invoke) return;
-    invoke('ext_reader_event', { event, data: withMokeContext(data) }).catch((err) => {
-      console.error('[mokeBridge] invoke ext_reader_event failed:', err);
-    });
+    return invoke('ext_reader_event', { event, data: withMokeContext(data) })
+      .then(() => undefined)
+      .catch((err) => {
+        console.error('[mokeBridge] invoke ext_reader_event failed:', err);
+      });
   });
 }
 
@@ -137,11 +139,13 @@ interface MokeAnnotationNavigationState {
   id: string;
   phase: 'pending' | 'navigating' | 'settled';
   lastContext: MokeAnnotationNavigationContext | null;
+  lastDelivery: Promise<void> | null;
   cleanupTimer: ReturnType<typeof setTimeout>;
 }
 
 let annotationNavigation: MokeAnnotationNavigationState | null = null;
 let finishedAnnotationNavigationId: string | null = null;
+let annotationDeliveryQueue = Promise.resolve();
 
 function navigationIdFromRestoreProgress(): string | null {
   if (typeof window === 'undefined') return null;
@@ -164,6 +168,7 @@ function getAnnotationNavigation(): MokeAnnotationNavigationState | null {
     id: navigationId,
     phase: 'pending',
     lastContext: null,
+    lastDelivery: null,
     cleanupTimer: setTimeout(() => {
       if (annotationNavigation === state) finishAnnotationNavigation(state, false, true);
     }, ANNOTATION_NAVIGATION_TTL_MS),
@@ -210,18 +215,14 @@ export function captureMokeAnnotationNavigation(): MokeAnnotationNavigationConte
 export function completeMokeAnnotationNavigation(): void {
   const state = getAnnotationNavigation();
   if (!state) return;
+  state.phase = 'settled';
   const context = state.lastContext;
-  if (!context) {
-    state.phase = 'settled';
-  } else if (context.delivered) {
-    // The correlated relocate was already emitted while goTo() was pending.
-    // A lifecycle receipt lets the desktop host reclaim its one-shot state.
-    finishAnnotationNavigation(state, true, true);
-  } else {
+  if (context && !context.delivered) {
     // The raw relocate is waiting in FoliateViewer's rAF coalescer. Mutating
     // its captured context preserves correlation when it is emitted later.
     context.phase = 'complete';
   }
+  finishAnnotationNavigationAfterDelivery(state);
 }
 
 export function cancelMokeAnnotationNavigation(notifyHost = true): void {
@@ -241,13 +242,23 @@ export function withMokeAnnotationNavigation(
     moke_navigation_phase: context.phase,
   };
   context.delivered = true;
-  const state = annotationNavigation;
-  if (state?.id === context.id && context.phase === 'complete') {
-    // The terminal page event itself tells the host to clear; do not race it
-    // with a separate completion event.
-    finishAnnotationNavigation(state, true, false);
-  }
   return result;
+}
+
+function finishAnnotationNavigationAfterDelivery(state: MokeAnnotationNavigationState): void {
+  if (state.phase !== 'settled' || !state.lastDelivery) return;
+  const delivery = state.lastDelivery;
+  void delivery.then(() => {
+    if (
+      annotationNavigation === state &&
+      state.phase === 'settled' &&
+      state.lastDelivery === delivery
+    ) {
+      // The finished receipt is emitted only after the last correlated page
+      // event has reached the host, so it cannot clear suppression too early.
+      finishAnnotationNavigation(state, true, true);
+    }
+  });
 }
 
 function isAnnotationNavigationEvent(data: Record<string, unknown>): boolean {
@@ -438,7 +449,15 @@ export function emitReaderEvent(event: string, data: Record<string, unknown>): P
   // a completion receipt could otherwise clear the host state before the
   // delayed page event arrives. These launch-only events are low volume.
   if (annotationNavigationEvent) {
-    return _doEmit(event, data);
+    const delivery = annotationDeliveryQueue.then(() => _doEmit(event, data));
+    annotationDeliveryQueue = delivery;
+    const navigationId = data['moke_navigation_id'];
+    const state = annotationNavigation;
+    if (state && state.id === navigationId) {
+      state.lastDelivery = delivery;
+      finishAnnotationNavigationAfterDelivery(state);
+    }
+    return delivery;
   }
 
   if (THROTTLED_EVENTS.has(event)) {

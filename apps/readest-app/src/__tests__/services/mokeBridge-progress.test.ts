@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // The reader persists progress to the Moke server through the Tauri HTTP
 // plugin. Stub it so the unit environment stays free of Tauri internals.
-const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
+const { fetchMock, invokeMock } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  invokeMock: vi.fn(),
+}));
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: fetchMock }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
 import { mokeProgressStorageKey } from '@/helpers/mokeLaunchContext';
 import {
@@ -22,6 +25,8 @@ describe('mokeBridge server-side progress persistence', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue({ status: 200 } as Response);
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
     window.__MOKE_EMBEDDED = true;
     window.__MOKE_SERVER_URL = SERVER_URL;
     window.__MOKE_BOOK_ID = '42';
@@ -156,6 +161,46 @@ describe('mokeBridge server-side progress persistence', () => {
     expect(
       JSON.parse(localStorage.getItem(mokeProgressStorageKey(SERVER_URL, '42'))!).location,
     ).toBe('epubcfi(/6/6)');
+  });
+
+  it('notifies completion only after the terminal correlated page event is delivered', async () => {
+    window.__MOKE_RESTORE_PROGRESS = {
+      location: 'epubcfi(/6/4!/4/2)',
+      moke_navigation_id: 'locate-ordered',
+      moke_navigation_kind: 'annotation-locate',
+    };
+
+    let releasePageDelivery: (() => void) | undefined;
+    const pageDelivery = new Promise<void>((resolve) => {
+      releasePageDelivery = resolve;
+    });
+    const deliveredEvents: string[] = [];
+    invokeMock.mockImplementation((_command: string, args: Record<string, unknown>) => {
+      const event = String(args['event']);
+      deliveredEvents.push(event);
+      return event === 'page:changed' ? pageDelivery : Promise.resolve(undefined);
+    });
+
+    beginMokeAnnotationNavigation();
+    const context = captureMokeAnnotationNavigation();
+    const pageEvent = emitReaderEvent(
+      'page:changed',
+      withMokeAnnotationNavigation(
+        { book_id: 'abc123', location: 'epubcfi(/6/4!/4/2:0)' },
+        context,
+      ),
+    );
+    completeMokeAnnotationNavigation();
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(deliveredEvents).toEqual(['page:changed']);
+
+    releasePageDelivery?.();
+    await pageEvent;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(deliveredEvents).toEqual(['page:changed', 'annotation-locate:finished']);
   });
 
   it('recycles annotation navigation state after failure and timeout', async () => {
