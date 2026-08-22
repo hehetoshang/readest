@@ -1,7 +1,7 @@
 ---
 name: image-zoom-trackpad-flicker-4742
 description: "Trackpad pinch-zoom flickered the image viewer; macOS pinch = ctrl+wheel stream, disable CSS transition during continuous gestures"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: affbfa14-0152-4d69-8fce-f7e0b9ee97a3

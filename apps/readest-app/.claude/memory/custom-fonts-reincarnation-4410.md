@@ -1,7 +1,7 @@
 ---
 name: custom-fonts-reincarnation-4410
 description: Custom fonts/textures disappear when logged into cloud sync after re-import-after-delete; CRDT remove-wins needs a reincarnation token
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 2b61b392-4d32-4516-84bd-f362bba22378

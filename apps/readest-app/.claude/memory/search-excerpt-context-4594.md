@@ -1,7 +1,7 @@
 ---
 name: search-excerpt-context-4594
 description: Fulltext search excerpt showed no context for italic/styled words; makeExcerpt only read context within the matched text node. RESOLVED (foliate-js#25 + readest#4631)
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5220a7ee-c8bc-44c0-81fb-cc3bc2cc4f54

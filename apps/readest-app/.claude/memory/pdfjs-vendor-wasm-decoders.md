@@ -1,7 +1,7 @@
 ---
 name: pdfjs-vendor-wasm-decoders
 description: Scanned PDFs blank in CI builds but fine locally — pdfjs wasm decoders (jbig2.wasm) not copied to public/vendor/pdfjs
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9066c0b0-71a6-4db0-92c1-c3ccacf1ff0d

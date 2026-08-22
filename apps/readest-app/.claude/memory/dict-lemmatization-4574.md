@@ -1,7 +1,7 @@
 ---
 name: dict-lemmatization-4574
 description: "Dictionary lookup lemmatizes inflected words (ran→run, mice→mouse) before lookup; pluggable per-language registry, English impl, candidate-chain integration"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: d4206b72-47da-4c3d-adab-04df32c1137a

@@ -1,7 +1,7 @@
 ---
 name: biometric-app-lock-4645
 description: "Biometric (fingerprint/Face ID) startup unlock layered over the PIN app-lock; gotchas for applock-store seeding, mobile-cfg crate, and scoped i18n"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 7d0f633b-0e69-405e-a4b4-5a1b19723d86

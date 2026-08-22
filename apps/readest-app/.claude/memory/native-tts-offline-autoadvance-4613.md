@@ -1,7 +1,7 @@
 ---
 name: native-tts-offline-autoadvance-4613
 description: "Android/iOS System TTS stops at chapter end (or random intervals) offline — controller only auto-advances on 'end', native terminal 'error' dead-ends + wedges state"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5ae3d6fc-9082-4ba2-b7d4-e02dd277ee8f

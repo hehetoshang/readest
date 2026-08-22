@@ -1,7 +1,7 @@
 ---
 name: third-party-library-autosync-4835
 description: Third-party cloud sync (WebDAV/Drive) library.json auto-sync on import/delete/close — parity with useBooksSync; delete propagation needs full library
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 50e2c2b8-ca61-4c33-acae-cd5d2c9aa93f

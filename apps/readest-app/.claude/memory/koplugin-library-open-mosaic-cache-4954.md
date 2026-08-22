@@ -1,7 +1,7 @@
 ---
 name: koplugin-library-open-mosaic-cache-4954
 description: koplugin Library slow open on large libraries — group-cover mosaics recomposed every paint; fixed by availability-keyed cache + async compose
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 7e7dbb83-cffb-495d-9778-bf94ccb45d8b

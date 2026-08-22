@@ -1,7 +1,7 @@
 ---
 name: in-place-delete-wiped-originals
 description: "Deleting a \"Read books in place\" book from Readest used to permanently delete the user's original source file; fixed (PR #4696) to never touch external sources"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 432bbb95-47b4-4d9c-825b-528168e2cfb7

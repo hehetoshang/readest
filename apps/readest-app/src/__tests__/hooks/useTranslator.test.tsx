@@ -134,21 +134,14 @@ describe('useTranslator', () => {
   it('falls back to the first available third-party translator when AI is disabled', async () => {
     mockSettings.settings.aiSettings.enabled = false;
 
-    // The first available translator is azure (deepl is removed and yandex is
-    // disabled). Mock the Edge translatetext endpoint so the fallback path
-    // produces a real translation.
-    const mockFetch = vi.fn((url: string) => {
-      if (url.includes('edge.microsoft.com/translate/translatetext')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => [{ translations: [{ text: '你好' }] }],
-        });
-      }
-      return Promise.resolve({
+    // Azure now needs a Readest web token, so a signed-out Moke session falls
+    // back to Google. Mock its nested segment response shape.
+    const mockFetch = vi.fn(() =>
+      Promise.resolve({
         ok: true,
-        json: async () => [['你好', 'hello', null, null, 10]],
-      });
-    });
+        json: async () => [[['你好', 'hello', null, null, 10]]],
+      }),
+    );
     vi.stubGlobal('fetch', mockFetch);
 
     const { result } = renderHook(() =>

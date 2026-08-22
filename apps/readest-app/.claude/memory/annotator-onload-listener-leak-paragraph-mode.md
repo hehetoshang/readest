@@ -1,7 +1,7 @@
 ---
 name: annotator-onload-listener-leak-paragraph-mode
 description: "Paragraph mode degrades over chapters on Android (#4735) — Annotator onLoad leaked renderer-scroll + native-touch listeners on long-lived objects; per-view fix + the reusable per-section-leak pattern"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 980f8d79-9360-4402-bd49-8dd389200c1e

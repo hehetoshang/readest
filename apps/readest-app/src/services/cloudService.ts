@@ -59,6 +59,7 @@ export async function uploadFileToCloud(
   _handleProgress: ProgressHandler,
   _hash: string,
   _temp = false,
+  _media?: string,
 ): Promise<string | undefined> {
   return undefined;
 }

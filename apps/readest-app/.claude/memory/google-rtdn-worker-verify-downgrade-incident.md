@@ -1,7 +1,7 @@
 ---
 name: google-rtdn-worker-verify-downgrade-incident
 description: "Google Play RTDN webhook on CF Worker fails verification 100%, fallback downgraded 22 active paying subs to free (Jun 24–Jul 17 2026); restore blocked by upsert order_id conflict-target bug"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: d0592fc5-54dd-410f-ab3b-c234d4e45c53

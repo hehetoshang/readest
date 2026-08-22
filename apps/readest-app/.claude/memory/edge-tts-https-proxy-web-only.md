@@ -1,7 +1,7 @@
 ---
 name: edge-tts-https-proxy-web-only
 description: Tauri apps must never fall back to the /api/tts/edge https proxy; it is a web-browser-only fallback
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 576a5112-41af-4b4f-8edf-32d18d4feada

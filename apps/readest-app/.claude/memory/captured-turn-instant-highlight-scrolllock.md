@@ -1,7 +1,7 @@
 ---
 name: captured-turn-instant-highlight-scrolllock
 description: Captured slide/curl turns are a parallel swipe path that must mirror EVERY native paginator gate — scrollLocked (instant highlight) and the non-collapsed-selection gate (non-instant selection, iOS 18.7)
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 871c7b42-61c0-44e7-a1d6-8edb35d80300

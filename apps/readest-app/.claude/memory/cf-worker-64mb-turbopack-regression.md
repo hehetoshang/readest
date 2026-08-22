@@ -1,7 +1,7 @@
 ---
 name: cf-worker-64mb-turbopack-regression
 description: Cloudflare deploy failed 64 MiB worker limit; root cause was
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 74519cda-4e22-4734-8ce8-1001f104b4dd

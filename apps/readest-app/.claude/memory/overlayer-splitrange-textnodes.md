@@ -1,7 +1,7 @@
 ---
 name: overlayer-splitrange-textnodes
 description: "Overlayer highlight rects — split range by TEXT NODES, not a block-tag selector; li/blockquote text was silently dropped from SVG when highlight also touched a <p>"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 58d4b1a1-8823-4474-9966-c96727692e3f

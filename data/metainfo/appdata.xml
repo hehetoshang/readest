@@ -70,19 +70,34 @@
   </supports>
 
   <releases>
+    <release version="0.12.1" date="2026-08-08">
+      <description>
+        <ul>
+          <li>Text-to-Speech: Books that come with recorded narration now play their own audio in step with the text, and you can set the sleep timer to stop at the end of a chapter</li>
+          <li>Library: Added full text search across your books with fuzzy and nearby-word matching, importing web novels from a link, bulk downloading from the shelf, and page counts in book details</li>
+          <li>Annotations: Your notes and highlights now live in one hub, where you can export and import them as a file, copy a link back to any highlight, and write math formulas in your notes</li>
+          <li>Reading: You can now pull down to add a bookmark, tap the page label to jump to any page, tap the footer to bring up the progress bar, and turn pages with an Apple Pencil double tap or squeeze</li>
+          <li>Reading: Fixed layout books can now scroll horizontally, image descriptions show in the image viewer, search results group by chapter, and the mouse cursor gets out of the way while you read</li>
+          <li>Sync: Added iCloud sync on iPhone, iPad and Mac, plus a BookOrbit integration that keeps your annotations, bookmarks, stats and reading status in step</li>
+          <li>Translation: Translated text now keeps its bold, italic and other inline formatting, and the Azure and Yandex translators work again</li>
+          <li>Styling: Added Ambient Mode on Android, a refreshed theme and background picker with separate looks for your library and reader, and cleaner popups throughout</li>
+          <li>PDF: Sharper text on desktop and a readable footer in scrolled mode</li>
+          <li>More: Markdown books now pick up their title and author automatically and show every heading in the contents, plus fixes for some crashes</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.11.20" date="2026-07-20">
       <description>
         <ul>
-          <li>Reading: You can now subscribe to RSS, Atom, and JSON feeds and read them as periodical books in your library</li>
-          <li>Text-to-Speech: Read-aloud voices can now be downloaded per book for offline listening, alongside a redesigned player, new 0.8x and 0.85x speeds, and adjustable pauses between sentences and paragraphs</li>
+          <li>Text-to-Speech: Read-aloud voices can now be downloaded per book for offline listening, and adjustable pauses between sentences and paragraphs</li>
           <li>Text-to-Speech: Added CarPlay support on iOS and more reliable Android Auto controls so you can listen while driving</li>
-          <li>Sync: Added OneDrive as a cloud provider, you can now sync to several providers at once, and a wrong sync passphrase is caught and recoverable instead of failing silently</li>
-          <li>Reading: Added a right-edge swipe to change Auto Scroll speed, offline dictionary pronunciation, footnotes in Markdown books, and copying text now keeps its paragraph breaks</li>
+          <li>Sync: Added OneDrive as a cloud provider, you can now sync to several providers at once</li>
+          <li>Reading: Added a right-edge swipe to change Auto Scroll speed, footnotes in Markdown books, and copying text now keeps its paragraph breaks</li>
           <li>Reading: Smoother page-turn animations, steadier text selection on iOS, and a redesigned custom theme editor that stays readable on mobile</li>
           <li>Annotations: You can now copy a highlight or note together with a deep link that jumps straight back to its spot in the book</li>
           <li>Library: You can now sort and filter your shelf by time remaining, and the Recently Read shelf and widget show only books you're currently reading</li>
           <li>PDF: Fixed a crash that could happen when turning pages or zooming large PDFs on iOS</li>
-          <li>More: Kept paying subscribers from being downgraded by mistake, fixed OPDS catalogs disappearing after a restart, and improved 32-bit Android stability and app-lock privacy</li>
+          <li>More: Fixed OPDS catalogs disappearing after a restart, and improved 32-bit Android stability</li>
         </ul>
       </description>
     </release>
@@ -207,19 +222,6 @@
           <li>OPDS: You can now edit your registered catalogs, with better handling of download filenames</li>
           <li>Speed Reading: Your reading position now syncs across devices</li>
           <li>Platform: Fixed window buttons on macOS, reduced crashes on iOS</li>
-        </ul>
-      </description>
-    </release>
-    <release version="0.10.4" date="2026-04-06">
-      <description>
-        <ul>
-          <li>Annotations: You can now name your highlight colors, and your custom names sync across devices</li>
-          <li>Annotations: Fixed highlights that stayed on the page after being deleted from the sidebar</li>
-          <li>Speed Reading: Added an option to split long words, a faster countdown</li>
-          <li>Text-to-Speech: Fixed double playback when tapping the play button in quick succession</li>
-          <li>Accessibility: Dropdown menus now open reliably when activated with the keyboard</li>
-          <li>Reading: Background textures now display correctly when you override the theme background color</li>
-          <li>Translation: Temporarily disabled the Yandex provider while its service is unavailable</li>
         </ul>
       </description>
     </release>

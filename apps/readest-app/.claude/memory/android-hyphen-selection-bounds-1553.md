@@ -1,7 +1,7 @@
 ---
 name: android-hyphen-selection-bounds-1553
 description: "#1553 Android selection breaks on first word of hyphenated paragraphs — Blink generated-hyphen bounds bug, full RCA + app-side repair/suppress fix"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 16f94822-04b0-4be3-a47e-8a2e3cab290a

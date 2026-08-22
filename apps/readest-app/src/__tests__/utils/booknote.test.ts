@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { isChapterOnlyBookNote, renderBookNoteHtml } from '@/utils/booknote';
+import {
+  isChapterOnlyBookNote,
+  renderBookNoteHtml,
+  sanitizeRenderedBookNoteHtml,
+} from '@/utils/booknote';
 
 describe('isChapterOnlyBookNote', () => {
   it('keeps an explicitly degraded external annotation without a CFI', () => {
@@ -23,5 +27,15 @@ describe('renderBookNoteHtml', () => {
     expect(html).toContain('<strong>safe</strong>');
     expect(html).toContain('<img src="x">');
     expect(html).not.toContain('onerror');
+  });
+
+  it('preserves upstream MathML while stripping executable note markup', () => {
+    const html = sanitizeRenderedBookNoteHtml(
+      '<math><semantics><mi>x</mi><annotation encoding="application/x-tex">x</annotation></semantics></math><script>alert(1)</script>',
+    );
+
+    expect(html).toContain('<math>');
+    expect(html).toContain('<annotation encoding="application/x-tex">x</annotation>');
+    expect(html).not.toContain('<script');
   });
 });

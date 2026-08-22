@@ -1,7 +1,7 @@
 ---
 name: notch-mask-texture-4486
 description: "Scrolled-mode top inset mask occluded the bg texture; clip-path full-cell trick aligns the mask's texture tiles with the viewer's; CDP-inject + MAE seam verify"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 47d2276d-0e04-455c-99b5-4fd0a651b579

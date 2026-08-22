@@ -45,6 +45,23 @@ describe('Readest debug logging', () => {
     window.fetch = original;
   });
 
+  it('does not capture Tauri IPC transport requests', async () => {
+    const original = window.fetch;
+    const response = new Response(null, { status: 204 });
+    const fetchMock = vi.fn(async () => response);
+    window.fetch = fetchMock;
+    installNetworkCapture();
+
+    await window.fetch('http://ipc.localhost/plugin%3Aevent%7Cemit', { method: 'POST' });
+    await window.fetch('ipc://localhost/plugin%3Aevent%7Cemit', { method: 'POST' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(useDebugLogStore.getState().logs).toEqual([]);
+
+    uninstallNetworkCapture();
+    window.fetch = original;
+  });
+
   it('persists an explicit clear and accepts new logs afterwards', () => {
     useDebugLogStore.getState().addLog('info', 'reader', 'before clear');
     useDebugLogStore.getState().clear();

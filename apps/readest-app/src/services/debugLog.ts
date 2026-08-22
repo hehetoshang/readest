@@ -384,6 +384,15 @@ function sanitizedRequestUrl(input: RequestInfo | URL): string {
   }
 }
 
+function isTauriIpcUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.href);
+    return parsed.protocol === 'ipc:' || parsed.hostname === 'ipc.localhost';
+  } catch {
+    return false;
+  }
+}
+
 export function installNetworkCapture(): void {
   if (originalFetch || typeof window === 'undefined' || typeof window.fetch !== 'function') return;
   originalFetch = window.fetch.bind(window);
@@ -392,6 +401,11 @@ export function installNetworkCapture(): void {
       init?.method || (input instanceof Request ? input.method : 'GET')
     ).toUpperCase();
     const url = sanitizedRequestUrl(input);
+    // Tauri implements invoke/event calls through an internal fetch transport.
+    // Logging that transport emits another debug-sync event, recursively creating
+    // IPC requests until the WebView runs out of memory.
+    if (isTauriIpcUrl(url)) return originalFetch!(input, init);
+
     const startedAt = Date.now();
     useDebugLogStore
       .getState()

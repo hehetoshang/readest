@@ -1,7 +1,7 @@
 ---
 name: pdf-oom-range-flood-3470
 description: "Android/iOS large-PDF import/open OOM (#3470) = unthrottled pdf.js range-request flood, not whole-file load; fix = concurrency cap in foliate makePDF"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 1f5ecad5-076c-4170-939a-c80438c37f64

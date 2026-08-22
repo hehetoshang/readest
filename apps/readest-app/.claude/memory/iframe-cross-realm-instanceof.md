@@ -1,7 +1,7 @@
 ---
 name: iframe-cross-realm-instanceof
 description: "App-bundle code handling foliate iframe DOM must not use `instanceof Element/HTMLElement` — cross-realm, always false"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 2e8d274e-a4da-4d63-8afb-d7a600d560b2

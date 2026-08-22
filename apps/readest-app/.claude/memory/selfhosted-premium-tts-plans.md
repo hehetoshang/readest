@@ -1,7 +1,7 @@
 ---
 name: selfhosted-premium-tts-plans
 description: Readest Voice (self-hosted premium TTS) — spec + two implementation plans APPROVED via /autoplan 2026-07-08; implementation not started
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 7e5c8779-6af2-41a8-b56e-6472beec368b

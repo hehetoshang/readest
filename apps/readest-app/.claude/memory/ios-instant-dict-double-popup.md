@@ -1,7 +1,7 @@
 ---
 name: ios-instant-dict-double-popup
 description: iOS instant system-dictionary fired 2-3× per long-press + tap-to-deselect re-opened it + Word Lens ignored system dict; deferredAction once-per-gesture latch + long-press-hold gate
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 1c09f918-0b1d-4f75-b1c6-8cef5eb73d60

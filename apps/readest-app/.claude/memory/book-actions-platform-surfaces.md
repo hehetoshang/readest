@@ -1,7 +1,7 @@
 ---
 name: book-actions-platform-surfaces
 description: Where to add a library book action so it reaches every platform (context menu is desktop-only)
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 4efb7b40-cce1-4742-9730-7e93e643d196

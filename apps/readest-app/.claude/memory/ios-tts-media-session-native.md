@@ -1,7 +1,7 @@
 ---
 name: ios-tts-media-session-native
 description: iOS TTS media session rebuilt natively (MPNowPlayingInfoCenter via plugin) - fixes 0.11.18 lock-screen regression; DEVICE needs non-mixable claimed AVAudioSession (.spokenAudio); interruption/route-change + Android focus handling; directional play/pause + toggle
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 953eb6c3-86a7-43e6-b56e-5b14f2eacb28

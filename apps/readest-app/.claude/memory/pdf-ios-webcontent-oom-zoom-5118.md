@@ -1,7 +1,7 @@
 ---
 name: pdf-ios-webcontent-oom-zoom-5118
 description: "iOS PDF crash #5118 = WKWebView WebContent highwater OOM (2.1 GB), page reloads not app crash; fix in foliate pdf.js render() = clamp renderDpr + render DOM at display size, over-sample only canvas bitmap (no transform/zoom); zoom breaks getBoundingClientRect"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 15cc3f43-25b2-456e-ae02-e6bb36e46b2f

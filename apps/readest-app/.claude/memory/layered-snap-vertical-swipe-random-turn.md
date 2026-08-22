@@ -1,7 +1,7 @@
 ---
 name: layered-snap-vertical-swipe-random-turn
 description: "Slide (VT layered) mode randomly turned pages on vertical swipes (Xiaomi WebView 148); TWO last-sample-velocity paths, the dominant one being wobble-started drags committed on lift-off flick; whole-gesture alignment fix, device-verified on rebuilt APK"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 81e2afbf-8610-487b-936b-f4066195294c

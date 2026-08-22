@@ -1,7 +1,7 @@
 ---
 name: download-file-scope-android-regression
 description: "#4639 strict is_allowed broke ALL Android downloads to app data dir (covers/dicts/books); fix = app.path() base-dir membership, not glob scope"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: e78227be-6260-405a-88fb-48ffe4b20615
