@@ -31,7 +31,12 @@ import { useLibraryStore } from './libraryStore';
 import { clearBookProgress, getBookProgress, setBookProgress } from './readerProgressStore';
 import { uniqueId } from '@/utils/misc';
 import { isChapterOnlyBookNote } from '@/utils/booknote';
-import { emitReaderEvent, bookEventData } from '@/services/mokeBridge';
+import {
+  emitReaderEvent,
+  bookEventData,
+  withMokeAnnotationNavigation,
+  type MokeAnnotationNavigationContext,
+} from '@/services/mokeBridge';
 
 interface ViewState {
   /* Unique key for each book view */
@@ -91,6 +96,7 @@ interface ReaderStore {
     timeinfo: TimeInfo,
     range: Range,
     fraction: number,
+    mokeNavigation?: MokeAnnotationNavigationContext | null,
   ) => void;
   getProgress: (key: string) => BookProgress | null;
   setView: (key: string, view: FoliateView) => void;
@@ -425,6 +431,7 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
     timeinfo: TimeInfo,
     range: Range,
     fraction: number,
+    mokeNavigation?: MokeAnnotationNavigationContext | null,
   ) => {
     const id = key.split('-')[0]!;
     const bookData = useBookDataStore.getState().booksData[id];
@@ -474,17 +481,23 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
     }
 
     // Notify host (Moke): page / progress changed (throttled in mokeBridge).
-    emitReaderEvent('page:changed', {
-      book_id: id,
-      view_key: key,
-      location,
-      page: pageInfo.current + 1,
-      total_pages: pageInfo.total,
-      progress: progressPercentage,
-      fraction,
-      chapter: tocItem?.label ?? '',
-      section_href: tocItem?.href ?? '',
-    });
+    emitReaderEvent(
+      'page:changed',
+      withMokeAnnotationNavigation(
+        {
+          book_id: id,
+          view_key: key,
+          location,
+          page: pageInfo.current + 1,
+          total_pages: pageInfo.total,
+          progress: progressPercentage,
+          fraction,
+          chapter: tocItem?.label ?? '',
+          section_href: tocItem?.href ?? '',
+        },
+        mokeNavigation ?? null,
+      ),
+    );
 
     // Write progress to the standalone store. This is the only setState on
     // the hot swipe path that the previous implementation routed through

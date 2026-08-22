@@ -17,7 +17,12 @@
 
 import { useEffect, useRef } from 'react';
 import { useReaderStore } from '@/store/readerStore';
-import { emitReaderEvent } from '@/services/mokeBridge';
+import {
+  beginMokeAnnotationNavigation,
+  cancelMokeAnnotationNavigation,
+  completeMokeAnnotationNavigation,
+  emitReaderEvent,
+} from '@/services/mokeBridge';
 
 interface CommandPayload {
   request_id?: string;
@@ -62,8 +67,7 @@ function executeCommand(payload: CommandPayload, bookKeys: string[]): unknown {
         throw new Error('go_to_href requires an href string');
       }
       if (!view) throw new Error('No active reader view');
-      view.goTo(payload.href);
-      return { href: payload.href };
+      return Promise.resolve(view.goTo(payload.href)).then(() => ({ href: payload.href }));
     }
 
     case 'go_to_location': {
@@ -71,8 +75,9 @@ function executeCommand(payload: CommandPayload, bookKeys: string[]): unknown {
         throw new Error('go_to_location requires a location string');
       }
       if (!view) throw new Error('No active reader view');
-      view.goTo(payload.location);
-      return { location: payload.location };
+      return Promise.resolve(view.goTo(payload.location)).then(() => ({
+        location: payload.location,
+      }));
     }
 
     case 'next_page': {
@@ -141,7 +146,14 @@ export function useMokeCommandListener(bookKeys: string[]) {
 
           try {
             const result = executeCommand(payload, bookKeysRef.current);
-            reportResult(payload, true, result);
+            void Promise.resolve(result).then(
+              (resolved) => reportResult(payload, true, resolved),
+              (err: unknown) => {
+                const message = err instanceof Error ? err.message : String(err);
+                console.error('[mokeCommand] failed:', message);
+                reportResult(payload, false, message);
+              },
+            );
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             console.error('[mokeCommand] failed:', message);
@@ -194,33 +206,51 @@ export function useMokeCommandListener(bookKeys: string[]) {
     let cancelled = false;
     let attempts = 0;
     let timer: number | null = null;
+    let restoring = false;
 
     const reportResultSafe = (ok: boolean, resultOrError: unknown) => {
       reportResult({ ...command, request_id: 'moke-restore-progress' }, ok, resultOrError);
     };
 
+    const handleRestoreFailure = (err: unknown) => {
+      restoring = false;
+      // 退避：250ms 起步，翻倍封顶 4s；最多 60 次（远大于原 20 次）。
+      const delay = Math.min(250 * Math.pow(2, Math.min(attempts - 1, 4)), 4000);
+      if (attempts < 60) {
+        timer = window.setTimeout(tryRestore, delay);
+      } else {
+        // 终态：无论成功与否都标记本次会话已处理，避免把旧的
+        // __MOKE_RESTORE_PROGRESS 重放到后续打开的书上。
+        restoredRef.current = true;
+        cancelMokeAnnotationNavigation();
+        const message = err instanceof Error ? err.message : String(err);
+        reportResultSafe(false, message);
+      }
+    };
+
     const tryRestore = () => {
-      if (cancelled || restoredRef.current) return;
+      if (cancelled || restoredRef.current || restoring) return;
       attempts += 1;
 
       try {
-        executeCommand(command, bookKeysRef.current);
-        restoredRef.current = true;
-        if (timer) window.clearTimeout(timer);
-        timer = null;
-        reportResultSafe(true, { restored: true });
-      } catch (err) {
-        // 退避：250ms 起步，翻倍封顶 4s；最多 60 次（远大于原 20 次）。
-        const delay = Math.min(250 * Math.pow(2, Math.min(attempts - 1, 4)), 4000);
-        if (attempts < 60) {
-          timer = window.setTimeout(tryRestore, delay);
-        } else {
-          // 终态：无论成功与否都标记本次会话已处理，避免把旧的
-          // __MOKE_RESTORE_PROGRESS 重放到后续打开的书上。
-          restoredRef.current = true;
-          const message = err instanceof Error ? err.message : String(err);
-          reportResultSafe(false, message);
+        const key = getPrimaryKey(bookKeysRef.current);
+        if (!key || !useReaderStore.getState().getView(key)) {
+          throw new Error('No active reader view');
         }
+        restoring = true;
+        beginMokeAnnotationNavigation();
+        const result = executeCommand(command, bookKeysRef.current);
+        void Promise.resolve(result).then(() => {
+          if (cancelled) return;
+          restoring = false;
+          restoredRef.current = true;
+          if (timer) window.clearTimeout(timer);
+          timer = null;
+          completeMokeAnnotationNavigation();
+          reportResultSafe(true, { restored: true });
+        }, handleRestoreFailure);
+      } catch (err) {
+        handleRestoreFailure(err);
       }
     };
 
@@ -243,6 +273,7 @@ export function useMokeCommandListener(bookKeys: string[]) {
     return () => {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
+      if (!restoredRef.current) cancelMokeAnnotationNavigation();
       unsub();
     };
   }, [bookKeys]);

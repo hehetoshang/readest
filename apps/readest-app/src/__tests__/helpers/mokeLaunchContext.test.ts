@@ -48,6 +48,33 @@ describe('bootstrapMokeLaunchContext', () => {
     expect(window.__MOKE_DEBUG_PANEL).toBe(true);
   });
 
+  it('keeps an explicit annotation-locate target even when local progress is newer', () => {
+    const serverUrl = 'http://192.168.1.5:8080';
+    localStorage.setItem(
+      mokeProgressStorageKey(serverUrl, '42'),
+      JSON.stringify({ location: 'real-last-page', updated_at: '2026-08-12T10:00:00.000Z' }),
+    );
+    const annotationTarget = JSON.stringify({
+      location: 'epubcfi(/6/4!/4/2)',
+      updated_at: '2026-08-12T08:00:00.000Z',
+      moke_navigation_id: 'locate-42',
+      moke_navigation_kind: 'annotation-locate',
+    });
+    window.history.replaceState(
+      {},
+      '',
+      `/reader?moke=1&mokeBookId=42&mokeServerUrl=${encodeURIComponent(serverUrl)}` +
+        `&mokeRestoreProgress=${encodeURIComponent(annotationTarget)}`,
+    );
+
+    bootstrapMokeLaunchContext();
+
+    expect(window.__MOKE_RESTORE_PROGRESS).toMatchObject({
+      location: 'epubcfi(/6/4!/4/2)',
+      moke_navigation_id: 'locate-42',
+    });
+  });
+
   it('prefers a newer local snapshot over stale server progress in the URL', () => {
     const serverUrl = 'http://192.168.1.5:8080';
     localStorage.setItem(

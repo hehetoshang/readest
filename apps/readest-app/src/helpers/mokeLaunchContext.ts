@@ -87,6 +87,18 @@ export function bootstrapMokeLaunchContext(): void {
     }
   }
 
+  // Annotation location is an explicit one-shot navigation, not a candidate
+  // for "newest reading progress" selection. Keep it even when the user's
+  // ordinary local snapshot is newer; the bridge suppresses only its correlated
+  // relocations so that snapshot remains untouched.
+  if (
+    remoteProgress?.['moke_navigation_kind'] === 'annotation-locate' &&
+    typeof remoteProgress['moke_navigation_id'] === 'string'
+  ) {
+    window.__MOKE_RESTORE_PROGRESS = remoteProgress;
+    return;
+  }
+
   if (!localProgress) {
     window.__MOKE_RESTORE_PROGRESS = remoteProgress;
     return;

@@ -5,7 +5,13 @@ const THROTTLE_MS = 500;
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
-import { emitReaderEvent, throttleEntryCount } from '@/services/mokeBridge';
+import {
+  cancelMokeAnnotationNavigation,
+  captureMokeAnnotationNavigation,
+  emitReaderEvent,
+  throttleEntryCount,
+  withMokeAnnotationNavigation,
+} from '@/services/mokeBridge';
 
 describe('mokeBridge throttle table lifecycle', () => {
   beforeEach(() => {
@@ -14,12 +20,16 @@ describe('mokeBridge throttle table lifecycle', () => {
     window.__MOKE_EMBEDDED = true;
     window.__MOKE_SERVER_URL = null;
     window.__MOKE_BOOK_ID = null;
+    window.__MOKE_RESTORE_PROGRESS = null;
+    cancelMokeAnnotationNavigation(false);
     vi.useFakeTimers();
   });
 
   afterEach(() => {
+    cancelMokeAnnotationNavigation(false);
     vi.useRealTimers();
     window.__MOKE_EMBEDDED = false;
+    window.__MOKE_RESTORE_PROGRESS = null;
   });
 
   /** 冲刷 _doEmit 的异步 resolveInvoke/invoke 链（advanceTimersByTimeAsync 会同时清空微任务） */
@@ -28,6 +38,24 @@ describe('mokeBridge throttle table lifecycle', () => {
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(0);
   }
+
+  it('显式定位事件绕过 trailing throttle', async () => {
+    window.__MOKE_RESTORE_PROGRESS = {
+      location: 'epubcfi(/6/4)',
+      moke_navigation_id: 'locate-no-throttle',
+      moke_navigation_kind: 'annotation-locate',
+    };
+    const context = captureMokeAnnotationNavigation();
+
+    await emitReaderEvent(
+      'page:changed',
+      withMokeAnnotationNavigation({ page: 1, location: 'normalized-target' }, context),
+    );
+    await flush();
+
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(throttleEntryCount()).toBe(0);
+  });
 
   it('释放 leading edge 后的节流条目（事件停止后表为空）', async () => {
     void emitReaderEvent('page:changed', { page: 1 });

@@ -32,9 +32,11 @@ async function resolveInvoke() {
 function _doEmit(event: string, data: Record<string, unknown>): Promise<void> {
   return resolveInvoke().then((invoke) => {
     if (!invoke) return;
-    invoke('ext_reader_event', { event, data: withMokeContext(data) }).catch((err) => {
-      console.error('[mokeBridge] invoke ext_reader_event failed:', err);
-    });
+    return invoke('ext_reader_event', { event, data: withMokeContext(data) })
+      .then(() => undefined)
+      .catch((err) => {
+        console.error('[mokeBridge] invoke ext_reader_event failed:', err);
+      });
   });
 }
 
@@ -117,6 +119,153 @@ function withMokeContext(data: Record<string, unknown>): Record<string, unknown>
     ...data,
     moke_book_id: String(mokeBookId),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Annotation-locate navigation correlation
+// ---------------------------------------------------------------------------
+
+const ANNOTATION_NAVIGATION_TTL_MS = 2 * 60 * 1000;
+
+type MokeNavigationPhase = 'pending' | 'navigating' | 'complete';
+
+export interface MokeAnnotationNavigationContext {
+  id: string;
+  phase: MokeNavigationPhase;
+  delivered: boolean;
+}
+
+interface MokeAnnotationNavigationState {
+  id: string;
+  phase: 'pending' | 'navigating' | 'settled';
+  lastContext: MokeAnnotationNavigationContext | null;
+  lastDelivery: Promise<void> | null;
+  cleanupTimer: ReturnType<typeof setTimeout>;
+}
+
+let annotationNavigation: MokeAnnotationNavigationState | null = null;
+let finishedAnnotationNavigationId: string | null = null;
+let annotationDeliveryQueue = Promise.resolve();
+
+function navigationIdFromRestoreProgress(): string | null {
+  if (typeof window === 'undefined') return null;
+  const progress = window.__MOKE_RESTORE_PROGRESS;
+  if (!progress || typeof progress !== 'object') return null;
+  const record = progress as Record<string, unknown>;
+  return record['moke_navigation_kind'] === 'annotation-locate' &&
+    typeof record['moke_navigation_id'] === 'string'
+    ? record['moke_navigation_id']
+    : null;
+}
+
+function getAnnotationNavigation(): MokeAnnotationNavigationState | null {
+  const navigationId = navigationIdFromRestoreProgress();
+  if (!navigationId || navigationId === finishedAnnotationNavigationId) return null;
+  if (annotationNavigation?.id === navigationId) return annotationNavigation;
+  if (annotationNavigation) finishAnnotationNavigation(annotationNavigation, false, false);
+
+  const state: MokeAnnotationNavigationState = {
+    id: navigationId,
+    phase: 'pending',
+    lastContext: null,
+    lastDelivery: null,
+    cleanupTimer: setTimeout(() => {
+      if (annotationNavigation === state) finishAnnotationNavigation(state, false, true);
+    }, ANNOTATION_NAVIGATION_TTL_MS),
+  };
+  annotationNavigation = state;
+  return state;
+}
+
+function finishAnnotationNavigation(
+  state: MokeAnnotationNavigationState,
+  success: boolean,
+  notifyHost: boolean,
+): void {
+  clearTimeout(state.cleanupTimer);
+  if (annotationNavigation === state) annotationNavigation = null;
+  finishedAnnotationNavigationId = state.id;
+  if (notifyHost) {
+    void _doEmit('annotation-locate:finished', {
+      moke_navigation_id: state.id,
+      success,
+    });
+  }
+}
+
+export function beginMokeAnnotationNavigation(): void {
+  const state = getAnnotationNavigation();
+  if (!state) return;
+  state.phase = 'navigating';
+  state.lastContext = null;
+}
+
+export function captureMokeAnnotationNavigation(): MokeAnnotationNavigationContext | null {
+  const state = getAnnotationNavigation();
+  if (!state) return null;
+  const context: MokeAnnotationNavigationContext = {
+    id: state.id,
+    phase: state.phase === 'settled' ? 'complete' : state.phase,
+    delivered: false,
+  };
+  state.lastContext = context;
+  return context;
+}
+
+export function completeMokeAnnotationNavigation(): void {
+  const state = getAnnotationNavigation();
+  if (!state) return;
+  state.phase = 'settled';
+  const context = state.lastContext;
+  if (context && !context.delivered) {
+    // The raw relocate is waiting in FoliateViewer's rAF coalescer. Mutating
+    // its captured context preserves correlation when it is emitted later.
+    context.phase = 'complete';
+  }
+  finishAnnotationNavigationAfterDelivery(state);
+}
+
+export function cancelMokeAnnotationNavigation(notifyHost = true): void {
+  const state = annotationNavigation ?? getAnnotationNavigation();
+  if (state) finishAnnotationNavigation(state, false, notifyHost);
+}
+
+export function withMokeAnnotationNavigation(
+  data: Record<string, unknown>,
+  context: MokeAnnotationNavigationContext | null,
+): Record<string, unknown> {
+  if (!context) return data;
+  const result = {
+    ...data,
+    moke_navigation_id: context.id,
+    moke_navigation_kind: 'annotation-locate',
+    moke_navigation_phase: context.phase,
+  };
+  context.delivered = true;
+  return result;
+}
+
+function finishAnnotationNavigationAfterDelivery(state: MokeAnnotationNavigationState): void {
+  if (state.phase !== 'settled' || !state.lastDelivery) return;
+  const delivery = state.lastDelivery;
+  void delivery.then(() => {
+    if (
+      annotationNavigation === state &&
+      state.phase === 'settled' &&
+      state.lastDelivery === delivery
+    ) {
+      // The finished receipt is emitted only after the last correlated page
+      // event has reached the host, so it cannot clear suppression too early.
+      finishAnnotationNavigation(state, true, true);
+    }
+  });
+}
+
+function isAnnotationNavigationEvent(data: Record<string, unknown>): boolean {
+  return (
+    data['moke_navigation_kind'] === 'annotation-locate' &&
+    typeof data['moke_navigation_id'] === 'string'
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -272,20 +421,43 @@ const THROTTLED_EVENTS = new Set(['page:changed']);
 export function emitReaderEvent(event: string, data: Record<string, unknown>): Promise<void> {
   if (!isEmbedded()) return Promise.resolve();
 
-  // Synchronous local snapshot: survives system-back/page teardown and is the
-  // primary persistence path for users who are not signed in.
-  if (event === 'page:changed') {
+  const annotationNavigationEvent = event === 'page:changed' && isAnnotationNavigationEvent(data);
+
+  // Correlated startup/annotation relocations are previews, not reading
+  // progress. Skip both local and server persistence; genuine user turns have
+  // no navigation marker and continue through the ordinary paths below.
+  if (event === 'page:changed' && !annotationNavigationEvent) {
     saveProgressToLocalStorage(data);
   }
 
   // 单 WebView 运行时宿主应用已被卸载，这里由阅读器直接保存进度。
-  if (event === 'page:changed' && typeof window.__MOKE_SERVER_URL === 'string') {
+  if (
+    event === 'page:changed' &&
+    !annotationNavigationEvent &&
+    typeof window.__MOKE_SERVER_URL === 'string'
+  ) {
     scheduleProgressSave(data);
   }
 
-  // 关闭书籍前先冲刷待保存的进度，确保最后一页不丢失。
+  // 关闭书籍前先冲刷待保存的进度并回收定位状态。
   if (event === 'book:closed') {
+    cancelMokeAnnotationNavigation();
     return flushProgressSave().then(() => _doEmit(event, data));
+  }
+
+  // Never put correlation markers behind the generic trailing-edge throttle:
+  // a completion receipt could otherwise clear the host state before the
+  // delayed page event arrives. These launch-only events are low volume.
+  if (annotationNavigationEvent) {
+    const delivery = annotationDeliveryQueue.then(() => _doEmit(event, data));
+    annotationDeliveryQueue = delivery;
+    const navigationId = data['moke_navigation_id'];
+    const state = annotationNavigation;
+    if (state && state.id === navigationId) {
+      state.lastDelivery = delivery;
+      finishAnnotationNavigationAfterDelivery(state);
+    }
+    return delivery;
   }
 
   if (THROTTLED_EVENTS.has(event)) {
