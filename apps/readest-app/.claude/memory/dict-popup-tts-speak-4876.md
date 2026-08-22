@@ -1,7 +1,7 @@
 ---
 name: dict-popup-tts-speak-4876
 description: "Dictionary popup speaker button pronounces the headword via Edge TTS (#4876), with a standalone pronouncer that bypasses TTSController"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 98d0ef1c-84c2-4a16-85a0-0abad0010923

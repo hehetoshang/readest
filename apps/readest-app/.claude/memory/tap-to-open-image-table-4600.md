@@ -1,7 +1,7 @@
 ---
 name: tap-to-open-image-table-4600
 description: Single-tap opens image gallery / table zoom in reflowable EPUBs; the iframe-long-press message was renamed to iframe-open-media
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a41b6cab-c0f3-4740-a4c0-61a10b68fc09

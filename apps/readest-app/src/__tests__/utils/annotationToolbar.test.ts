@@ -8,6 +8,7 @@ import {
   addToolToToolbar,
   removeToolFromToolbar,
   reorderToolbar,
+  supportsProofread,
 } from '@/utils/annotationToolbar';
 
 describe('annotationToolbar helpers', () => {
@@ -30,6 +31,16 @@ describe('annotationToolbar helpers', () => {
     expect(DEFAULT_ANNOTATION_TOOLBAR_ITEMS).not.toContain('share');
   });
 
+  test('copylink is opt-in: off the default toolbar, offered in the available tray', () => {
+    expect(ALL_ANNOTATION_TOOL_TYPES).toContain('copylink');
+    expect(DEFAULT_ANNOTATION_TOOLBAR_ITEMS).not.toContain('copylink');
+    expect(getToolbarToolTypes(undefined, true)).not.toContain('copylink');
+    expect(getAvailableToolTypes(DEFAULT_ANNOTATION_TOOLBAR_ITEMS, true)).toContain('copylink');
+    expect(getToolbarToolTypes([...DEFAULT_ANNOTATION_TOOLBAR_ITEMS, 'copylink'], true)).toContain(
+      'copylink',
+    );
+  });
+
   test('getToolbarToolTypes preserves order and falls back to default when undefined', () => {
     expect(getToolbarToolTypes(undefined, true)).toEqual(DEFAULT_ANNOTATION_TOOLBAR_ITEMS);
     expect(getToolbarToolTypes(['search', 'copy'], true)).toEqual(['search', 'copy']);
@@ -46,6 +57,7 @@ describe('annotationToolbar helpers', () => {
 
   test('getAvailableToolTypes returns canonical-order complement', () => {
     expect(getAvailableToolTypes(['copy'], true)).toEqual([
+      'copylink',
       'highlight',
       'annotate',
       'search',
@@ -83,5 +95,25 @@ describe('annotationToolbar helpers', () => {
       'highlight',
     ]);
     expect(reorderToolbar(['copy', 'search'], 'copy', 'copy')).toEqual(['copy', 'search']);
+  });
+});
+
+describe('supportsProofread', () => {
+  // Proofread rewrites the rendered text through the content transformers, so
+  // it works on every reflowable format -- not just EPUB, which is all the
+  // original feature (#2725) shipped with and all the toolbar button allowed.
+  test('enables every reflowable format', () => {
+    for (const format of ['EPUB', 'MD', 'MOBI', 'AZW', 'AZW3', 'FB2', 'FBZ', 'TXT'] as const) {
+      expect(supportsProofread(format)).toBe(true);
+    }
+  });
+
+  test('excludes the fixed-layout formats, which have no text to transform', () => {
+    expect(supportsProofread('PDF')).toBe(false);
+    expect(supportsProofread('CBZ')).toBe(false);
+  });
+
+  test('excludes a book whose format is not known yet', () => {
+    expect(supportsProofread(undefined)).toBe(false);
   });
 });

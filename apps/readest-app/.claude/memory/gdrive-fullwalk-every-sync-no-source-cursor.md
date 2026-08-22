@@ -1,7 +1,7 @@
 ---
 name: gdrive-fullwalk-every-sync-no-source-cursor
 description: Google Drive file sync re-probes all 646 books every run (focus/Sync Now) because uploadedHashes never records no-source books; plus supabase focus events re-fire pullLibrary
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 894e0d6d-ce01-402b-8f2d-0f0670986a88

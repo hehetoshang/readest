@@ -1,7 +1,7 @@
 ---
 name: pageturn-bg-replace-reflow-4785
 description: "Page-turn frame drops at chapter boundaries (#4785) — per-frame"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: e42ea03e-cda7-4e59-b398-1a28f589b37e

@@ -1,7 +1,7 @@
 ---
 name: iframe-double-click-word-select
 description: Double-click / touch double-tap on a word selects it and fires the instant action or annotation toolbar
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: bac4ae5d-047f-4b4f-8a04-b239beb4d7d7

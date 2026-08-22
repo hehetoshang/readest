@@ -1,7 +1,7 @@
 ---
 name: paginated-texture-occlusion-4399
 description: Background texture absent in paginated mode (shown in scrolled) — opaque
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 1bd8a73e-f279-4ed8-9562-98e96d9723d5

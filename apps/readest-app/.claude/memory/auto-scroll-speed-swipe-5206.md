@@ -1,7 +1,7 @@
 ---
 name: auto-scroll-speed-swipe-5206
 description: "Right-edge swipe adjusts auto-scroll speed, mirroring the left-edge brightness gesture; MERGED"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5de6c875-3c1e-4948-a27e-9807380ece2f

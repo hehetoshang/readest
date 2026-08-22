@@ -1,7 +1,7 @@
 ---
 name: carplay-tts-support
 description: "CarPlay (audio) TTS on iOS - WORKING after tao 0.35/wry 0.55 upgrade; no tao patch needed; scene manifest re-added; media state via native session"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 2c0e8fb8-9678-4fe5-8500-b09548d46b6e

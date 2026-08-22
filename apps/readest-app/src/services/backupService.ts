@@ -38,16 +38,19 @@ export const BACKUP_SETTINGS_BLACKLIST = [
   'customRootDir',
   'externalLibraryFolders',
   'autoImportFolders',
+  'autoImportFlattenFolders',
   'savedBookCoverForLockScreenPath',
   // Per-device identity — restoring causes sync identity / HLC collisions.
   'replicaDeviceId',
   'kosync.deviceId',
+  'bookorbit.deviceId',
   // Sync cursors — stale values make sync skip pulls or re-push everything.
   'lastSyncedAtBooks',
   'lastSyncedAtConfigs',
   'lastSyncedAtNotes',
   'lastSyncedAtReplicas',
   'readwise.lastSyncedAt',
+  'talebook.lastSyncedAt',
   'hardcover.lastSyncedAt',
   'googleDrive.deviceId',
   'googleDrive.lastSyncedAt',
@@ -61,6 +64,9 @@ export const BACKUP_SETTINGS_BLACKLIST = [
   's3.deviceId',
   's3.lastSyncedAt',
   's3.providerSelectedAt',
+  'icloud.deviceId',
+  'icloud.lastSyncedAt',
+  'icloud.providerSelectedAt',
   'readestCloud.disabledAt',
   // Transient runtime state — book keys may not exist post-restore; screen
   // brightness is live device state.
@@ -81,7 +87,12 @@ export const BACKUP_SETTINGS_CREDENTIAL_FIELDS = [
   'kosync.username',
   'kosync.userkey',
   'kosync.password',
+  'bookorbit.username',
+  'bookorbit.userkey',
+  'bookorbit.password',
   'readwise.accessToken',
+  'talebook.username',
+  'talebook.accessToken',
   'hardcover.accessToken',
   // S3 access keys are strong, long-lived cloud credentials — strip them from
   // unencrypted backup zips unless the user opts into including credentials.

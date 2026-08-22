@@ -1,7 +1,7 @@
 ---
 name: table-dark-mode-tint-4419
 description: "Dark-mode table tint must stay gated on overrideColor; blanket `table *` color-mix breaks plain tables AND vertical-TOC spacer cells"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 114eeb22-c9b6-480d-8305-3a3190855638

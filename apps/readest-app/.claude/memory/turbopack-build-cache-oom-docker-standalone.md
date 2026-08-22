@@ -1,7 +1,7 @@
 ---
 name: turbopack-build-cache-oom-docker-standalone
 description: "Turbopack build-cache OOM that froze the Mac, and the gated Docker standalone image (PR"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 41c10f07-ba55-451b-89b4-7e13a5fa3087

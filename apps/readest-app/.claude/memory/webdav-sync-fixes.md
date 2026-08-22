@@ -1,7 +1,7 @@
 ---
 name: webdav-sync-fixes
 description: "Aggregator of WebDAV sync bug-fix memories (metadata LWW, groups, credentials, connect, serverUrl)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: b616ba37-dbf6-48e5-95b9-34fd2c642626

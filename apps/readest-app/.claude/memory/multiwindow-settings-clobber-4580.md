@@ -1,7 +1,7 @@
 ---
 name: multiwindow-settings-clobber-4580
 description: Pagination/global settings revert with multiple desktop windows; cross-window broadcast fix
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 4df1808d-e106-4316-9206-b4e606b4b9bf

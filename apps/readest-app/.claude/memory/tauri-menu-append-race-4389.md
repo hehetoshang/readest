@@ -1,7 +1,7 @@
 ---
 name: tauri-menu-append-race-4389
 description: "Un-awaited Tauri Menu.append() races on IPC → context menu items shuffle order randomly; fix = single Menu.new({ items })"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 8169b903-f66e-4c35-b90f-6b9110837588

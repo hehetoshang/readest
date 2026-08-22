@@ -1,7 +1,7 @@
 ---
 name: xcode26-swiftrs-ios-build-broken
 description: Xcode 26.2/Swift 6.2 broke all tauri iOS builds via swift-rs 1.0.7; fixed by vendored packages/swift-rs using --triple/--sdk
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 603140d5-b247-4f0f-9cdf-0c3479cbcb1e

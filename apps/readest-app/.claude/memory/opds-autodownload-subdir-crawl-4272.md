@@ -1,7 +1,7 @@
 ---
 name: opds-autodownload-subdir-crawl-4272
 description: OPDS auto-download
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 92b00cca-93fe-4255-bb5f-1db8d3421a35

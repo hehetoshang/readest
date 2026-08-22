@@ -1,7 +1,7 @@
 ---
 name: pinch-vs-twofinger-scroll-4858
 description: "Fixed-layout pinch-zoom too sensitive on touchscreen laptops (#4858); distinguish two-finger scroll (same direction) from pinch (opposite) via pending state + deadzone in useIframeEvents.useTouchEvent"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: ca71550d-0c81-44d1-b990-3892dc514d77

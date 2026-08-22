@@ -20,9 +20,11 @@ import { useFileSyncStore } from '@/store/fileSyncStore';
 import { CatalogManager } from '@/app/opds/components/CatalogManager';
 import { saveSysSettings } from '@/helpers/settings';
 import { navigateToLogin } from '@/utils/nav';
+import BookOrbitForm from './integrations/BookOrbitForm';
 import KOSyncForm from './integrations/KOSyncForm';
 import ReadwiseForm from './integrations/ReadwiseForm';
 import HardcoverForm from './integrations/HardcoverForm';
+import TalebookForm from './integrations/TalebookForm';
 import SendToReadestForm from './integrations/SendToReadestForm';
 import WebDAVForm from './integrations/WebDAVForm';
 import SubPageHeader from './SubPageHeader';
@@ -60,6 +62,7 @@ import { SectionTitle, SettingLabel, Tips } from './primitives';
 
 type SubPage =
   | 'kosync'
+  | 'bookorbit'
   | 'webdav'
   // Moke embedded reader: third-party cloud sync sub-pages are disabled.
   // | 'gdrive'
@@ -68,6 +71,7 @@ type SubPage =
   // | 'readest-cloud'
   | 'readwise'
   | 'hardcover'
+  | 'talebook'
   | 'opds'
   | 'send'
   | null;
@@ -129,9 +133,11 @@ const IntegrationsPanel: React.FC = () => {
     if (!requestedSubPage) return;
     if (
       requestedSubPage === 'kosync' ||
+      requestedSubPage === 'bookorbit' ||
       requestedSubPage === 'webdav' ||
       requestedSubPage === 'readwise' ||
       requestedSubPage === 'hardcover' ||
+      requestedSubPage === 'talebook' ||
       requestedSubPage === 'opds' ||
       requestedSubPage === 'send'
     ) {
@@ -148,6 +154,12 @@ const IntegrationsPanel: React.FC = () => {
     return (
       <div className='my-4 w-full'>
         <KOSyncForm onBack={() => setSubPage(null)} />
+      </div>
+    );
+  if (subPage === 'bookorbit')
+    return (
+      <div className='my-4 w-full'>
+        <BookOrbitForm onBack={() => setSubPage(null)} />
       </div>
     );
   if (subPage === 'webdav')
@@ -192,6 +204,12 @@ const IntegrationsPanel: React.FC = () => {
         <HardcoverForm onBack={() => setSubPage(null)} />
       </div>
     );
+  if (subPage === 'talebook')
+    return (
+      <div className='my-4 w-full'>
+        <TalebookForm onBack={() => setSubPage(null)} />
+      </div>
+    );
   if (subPage === 'opds')
     return (
       <div className='my-4 w-full'>
@@ -217,8 +235,15 @@ const IntegrationsPanel: React.FC = () => {
       : _('Connected')
     : _('Not connected');
 
+  const bookOrbitStatus = settings.bookorbit?.enabled
+    ? settings.bookorbit.username
+      ? _('Connected as {{user}}', { user: settings.bookorbit.username })
+      : _('Connected')
+    : _('Not connected');
+
   const readwiseStatus = settings.readwise?.enabled ? _('Connected') : _('Not connected');
   const hardcoverStatus = settings.hardcover?.enabled ? _('Connected') : _('Not connected');
+  const talebookStatus = settings.talebook?.enabled ? _('Connected') : _('Not connected');
 
   const webdavStatus = settings.webdav?.enabled
     ? isWebDAVSyncing
@@ -249,6 +274,12 @@ const IntegrationsPanel: React.FC = () => {
               onClick={() => setSubPage('kosync')}
             />
             <IntegrationRow
+              icon={RiBookOpenLine}
+              title={_('BookOrbit')}
+              status={bookOrbitStatus}
+              onClick={() => setSubPage('bookorbit')}
+            />
+            <IntegrationRow
               icon={RiBookReadLine}
               title={_('Readwise')}
               status={readwiseStatus}
@@ -259,6 +290,12 @@ const IntegrationsPanel: React.FC = () => {
               title={_('Hardcover')}
               status={hardcoverStatus}
               onClick={() => setSubPage('hardcover')}
+            />
+            <IntegrationRow
+              icon={RiBookOpenLine}
+              title={_('Talebook')}
+              status={talebookStatus}
+              onClick={() => setSubPage('talebook')}
             />
           </div>
         </div>

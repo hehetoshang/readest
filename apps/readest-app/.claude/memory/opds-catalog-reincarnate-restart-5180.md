@@ -1,6 +1,6 @@
 ---
 name: opds-catalog-reincarnate-restart-5180
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 65593e7d-49eb-4c44-a3f9-c126194d8258

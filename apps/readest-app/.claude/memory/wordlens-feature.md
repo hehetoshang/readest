@@ -1,7 +1,7 @@
 ---
 name: wordlens-feature
 description: "Word Lens inline-gloss feature — CFI-safe ruby technique, TTS/search isolation, gloss-data build caveat"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5a24d2e1-f19b-4e29-b1f6-e5e4969e2a7b

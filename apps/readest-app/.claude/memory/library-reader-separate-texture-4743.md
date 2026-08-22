@@ -1,7 +1,7 @@
 ---
 name: library-reader-separate-texture-4743
 description: "Separate library vs reader background texture (#4743); shared-style-element + two gotchas"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: dfdb7b38-1869-4fb4-b869-c32301c80128

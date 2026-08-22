@@ -41,6 +41,7 @@ import { upgradeToKeychainIfAvailable } from '@/libs/crypto/passphrase';
 import { cryptoSession } from '@/libs/crypto/session';
 import { useAppLockStore } from '@/store/appLockStore';
 import { initSettingsSync } from '@/services/sync/replicaSettingsSync';
+import DebugLogIntegration from '@/components/DebugLogIntegration';
 
 // One-time, on first launch after this feature ships, decide how to handle
 // PostHog telemetry for the current install:
@@ -170,7 +171,7 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
         }
         // ponytail: host (Moke) can force e-ink even when the on-disk setting is
         // off (desktop WebView can't be detected via CSS media query).
-        if (typeof window !== 'undefined' && (window as any).__MOKE_EINK === true) {
+        if (typeof window !== 'undefined' && window.__MOKE_EINK === true) {
           applyEinkMode(true);
         }
         // Initialize the app-lock gate from on-disk settings. Until
@@ -253,6 +254,7 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
                   open={showTelemetryConsent}
                   onClose={() => setShowTelemetryConsent(false)}
                 />
+                <DebugLogIntegration />
                 {showAppLockScreen && <AppLockScreen />}
               </CommandPaletteProvider>
             </DropdownProvider>

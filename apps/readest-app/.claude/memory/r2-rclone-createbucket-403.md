@@ -1,7 +1,7 @@
 ---
 name: r2-rclone-createbucket-403
 description: rclone copyto/moveto 403s on object-scoped R2 tokens (hidden CreateBucket probe); use a directory rclone copy
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: b0c01e3c-9485-45fe-8ae3-eb5f2762f8fa

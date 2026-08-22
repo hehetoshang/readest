@@ -1,7 +1,7 @@
 ---
 name: rsvp-font-settings-4519
 description: "RSVP word uses the reader's font face/family via getBaseFontFamily; overlay renders in the top document where fonts are mounted"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 18ca3271-7e08-4b4f-bf33-a135370d5844

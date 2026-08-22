@@ -1,11 +1,12 @@
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { MdCheckCircle, MdCheckCircleOutline } from 'react-icons/md';
-import { LiaInfoCircleSolid } from 'react-icons/lia';
+import { LiaHeadphonesSolid, LiaInfoCircleSolid } from 'react-icons/lia';
 
 import { Book } from '@/types/book';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
 import { LibraryCoverFitType, LibraryViewModeType } from '@/types/settings';
 import { formatAuthors, formatDescription, formatSeries } from '@/utils/book';
@@ -37,6 +38,7 @@ const BookItem: React.FC<BookItemProps> = ({
 }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
+  const { settings } = useSettingsStore();
   const iconSize15 = useResponsiveSize(15);
 
   const [coverAspect, setCoverAspect] = useState<number | null>(null);
@@ -82,8 +84,11 @@ const BookItem: React.FC<BookItemProps> = ({
           mode={mode}
           book={book}
           coverFit={coverFit}
-          showSpine={false}
-          imageClassName='rounded shadow-md'
+          showSpine={settings.librarySkeuomorphicCovers}
+          imageClassName={clsx(
+            'shadow-md',
+            settings.librarySkeuomorphicCovers ? 'rounded-none' : 'rounded',
+          )}
           onAspectRatioChange={setCoverAspect}
         />
         {bookSelected && (
@@ -158,25 +163,28 @@ const BookItem: React.FC<BookItemProps> = ({
                 </div>
               </button>
             )}
-            {
-              transferProgress !== null ? (
-                transferProgress === 100 ? null : (
-                  <div
-                    className='radial-progress'
-                    style={
-                      {
-                        '--value': transferProgress,
-                        '--size': `${iconSize15}px`,
-                        '--thickness': '2px',
-                      } as React.CSSProperties
-                    }
-                    role='progressbar'
-                  ></div>
-                )
-              ) : null
-              /* Cloud upload/download buttons removed (auth disabled).
-               TODO: Restore when talebook server sync is connected. */
-            }
+            {book.hasNarration && (
+              <div
+                className='pt-[2px] sm:pt-[1px]'
+                title={_('Includes narration')}
+                aria-label={_('Includes narration')}
+              >
+                <LiaHeadphonesSolid size={iconSize15} />
+              </div>
+            )}
+            {transferProgress !== null && transferProgress !== 100 && (
+              <div
+                className='radial-progress'
+                style={
+                  {
+                    '--value': transferProgress,
+                    '--size': `${iconSize15}px`,
+                    '--thickness': '2px',
+                  } as React.CSSProperties
+                }
+                role='progressbar'
+              ></div>
+            )}
           </div>
         </div>
       </div>

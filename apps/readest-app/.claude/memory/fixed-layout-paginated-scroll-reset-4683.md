@@ -1,7 +1,7 @@
 ---
 name: fixed-layout-paginated-scroll-reset-4683
 description: "Fit-width tall fixed-layout page opens scrolled-to-end on WebKit page turn (#4683); Blink unaffected; fix = explicit scrollTop=0 on page-turn render"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 780a4235-5498-42c8-8286-7021c6fcf1ed

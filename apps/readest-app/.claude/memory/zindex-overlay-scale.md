@@ -1,7 +1,7 @@
 ---
 name: zindex-overlay-scale
 description: Global overlay z-index scale; why Add-Catalog-behind-Settings was mobile-only (window-border trap); RSVP de-escalated from 10000
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: e7590344-aa6d-4bec-9b6d-6f3b93b18c87

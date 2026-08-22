@@ -1,7 +1,7 @@
 ---
 name: ios-selection-toolbar-flash-defer
 description: iOS annotation toolbar flashed during system-handle selection drags; fixed by deferring touch selectionchange processing to handleTouchEnd
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 81e2afbf-8610-487b-936b-f4066195294c

@@ -1,7 +1,7 @@
 ---
 name: rsvp-rtl-word-display-4630
 description: RSVP ORP focus-letter split breaks Arabic/RTL shaping; render RTL words whole with dir=rtl
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 0561d60a-5d21-4b58-8bc9-1295a9f768ce

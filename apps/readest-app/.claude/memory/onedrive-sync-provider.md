@@ -1,7 +1,7 @@
 ---
 name: onedrive-sync-provider
 description: "Microsoft OneDrive cloud sync provider (#5007) — 4th FileSyncProvider; shared OAuth extraction + Graph App Folder transport; built via subagent-driven SDD, merge-ready pending Azure client id"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: f45876a0-f202-4f61-9fba-a66debe4c736

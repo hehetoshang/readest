@@ -1,7 +1,7 @@
 ---
 name: transfer-queue-clear-persistence
 description: "Transfer Queue \"Clear Completed/Failed/All\" reappeared on reload because the hook mutated the store directly and skipped persistQueue"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: daef2308-58b2-425d-924d-8a405b0e096a

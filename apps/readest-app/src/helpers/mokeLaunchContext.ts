@@ -9,10 +9,54 @@ export function bootstrapMokeLaunchContext(): void {
   const params = new URLSearchParams(window.location.search);
   if (params.get('moke') !== '1') return;
 
+  // Cross-document View Transitions are attached to the navigation itself,
+  // not to a particular button. Mark every Moke -> Readest document entry so
+  // the same animation covers the host's read button and embedded-reader
+  // button. The marker is cleared after the transition so normal Readest SPA
+  // transitions keep their existing animation direction.
+  const navigationApi = (
+    window as Window & {
+      navigation?: { activation?: { from?: { url?: string } | null } };
+    }
+  ).navigation;
+  const fromUrl = navigationApi?.activation?.from?.url;
+  if (fromUrl) {
+    try {
+      const fromPath = new URL(fromUrl).pathname.replace(/\/$/, '') || '/';
+      if (fromPath !== '/readest' && !fromPath.startsWith('/readest/')) {
+        const root = document.documentElement;
+        root.dataset['mokeReaderTransition'] = 'enter';
+        const clearMarker = () => {
+          delete root.dataset['mokeReaderTransition'];
+        };
+        window.addEventListener(
+          'pagereveal',
+          (event) => {
+            const transition = (
+              event as Event & {
+                viewTransition?: { finished: Promise<unknown> };
+              }
+            ).viewTransition;
+            if (!transition) {
+              clearMarker();
+              return;
+            }
+            void transition.finished.finally(clearMarker).catch(() => undefined);
+          },
+          { once: true },
+        );
+        window.setTimeout(clearMarker, 1_000);
+      }
+    } catch {
+      // Ignore malformed activation URLs and continue bootstrapping Moke.
+    }
+  }
+
   const serverUrl = params.get('mokeServerUrl') || '';
   const mokeBookId = params.get('mokeBookId') || '';
   window.__MOKE_EMBEDDED = true;
   window.__MOKE_EINK = params.get('mokeEink') === '1';
+  window.__MOKE_DEBUG_PANEL = params.get('mokeDebug') === '1';
   window.__MOKE_BOOK_ID = mokeBookId || null;
   window.__MOKE_SERVER_URL = serverUrl || null;
   let remoteProgress: Record<string, unknown> | null = null;

@@ -1,7 +1,7 @@
 ---
 name: native-ios-tts-4676
 description: Native local iOS TTS (AVSpeechSynthesizer) mirroring the Android native TTS plugin;
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: ec6b5ad5-f187-4615-83b4-33b1a9e77ba7

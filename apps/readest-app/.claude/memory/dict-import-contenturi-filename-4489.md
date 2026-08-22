@@ -1,7 +1,7 @@
 ---
 name: dict-import-contenturi-filename-4489
 description: "Android dict import \"incomplete bundle\" — ext-less content URIs; classify used getFilename (string) not basename (content resolver)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 92f1011c-89b9-4ae1-b128-f24cfb4462a8

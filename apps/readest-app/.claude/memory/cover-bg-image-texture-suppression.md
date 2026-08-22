@@ -1,7 +1,7 @@
 ---
 name: cover-bg-image-texture-suppression
 description: Cover painted via body background-image vanished under an active bg texture (parchment) because textureAwareBackground misclassified it as transparent
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9d32520c-53be-4871-9104-d93617736e30
