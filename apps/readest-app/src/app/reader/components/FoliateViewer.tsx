@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { convertBlobUrlToDataUrl, BookDoc, getDirection } from '@/libs/document';
 import { BOOK_IDS_SEPARATOR } from '@/services/constants';
+import { enforceBookResourcePolicy, getBookContentPolicy } from '@/services/bookContentSecurity';
 import { BookConfig, PageInfo } from '@/types/book';
 import { FoliateView, wrappedFoliateView } from '@/types/view';
 import { Insets } from '@/types/misc';
@@ -65,7 +66,6 @@ import {
 } from '../utils/iframeEventHandlers';
 import { getMaxInlineSize } from '@/utils/config';
 import { getDirFromUILanguage } from '@/utils/rtl';
-import { isTauriAppPlatform } from '@/services/environment';
 import { TransformContext } from '@/services/transformers/types';
 import { transformContent } from '@/services/transformService';
 import { lockScreenOrientation, setSelectionSuppressed } from '@/utils/bridge';
@@ -96,12 +96,6 @@ import KOSyncConflictResolver from './KOSyncResolver';
 import ImageViewer from './ImageViewer';
 import TableViewer from './TableViewer';
 import { getTTSMiniPlayerClearance } from '../utils/ttsMiniPlayerPosition';
-
-declare global {
-  interface Window {
-    eval(script: string): void;
-  }
-}
 
 const FoliateViewer: React.FC<{
   bookKey: string;
@@ -277,39 +271,53 @@ const FoliateViewer: React.FC<{
     return (event: Event) => {
       const { detail } = event as CustomEvent;
       detail.data = Promise.resolve(detail.data)
-        .then((data) => {
+        .then(async (data) => {
+          const policy = getBookContentPolicy(detail.type, detail.name);
+          if (policy.kind === 'reject') return '';
+          if (policy.kind === 'passthrough') return data;
+
           const viewSettings = getViewSettings(bookKey);
-          const bookData = getBookData(bookKey);
-          if (viewSettings && detail.type === 'text/css')
-            return transformStylesheet(data, width, height, viewSettings.vertical);
-          const isHtml = detail.type === 'application/xhtml+xml' || detail.type === 'text/html';
-          if (viewSettings && bookData && isHtml) {
-            const ctx: TransformContext = {
-              bookKey,
-              viewSettings,
-              width,
-              height,
-              isFixedLayout: bookData.isFixedLayout,
-              primaryLanguage: bookData.book?.primaryLanguage,
-              userLocale: getLocale(),
-              content: data,
-              sectionHref: detail.name,
-              transformers: [
-                'style',
-                'punctuation',
-                'footnote',
-                'whitespace',
-                'language',
-                'sanitizer',
-                'simplecc',
-                'nbsp',
-                'proofread',
-                'warichu',
-              ],
-            };
-            return Promise.resolve(transformContent(ctx));
+          const text =
+            typeof data === 'string' ? data : data instanceof Blob ? await data.text() : null;
+          if (text === null) return '';
+
+          detail.type = policy.contentType;
+          if (policy.kind === 'stylesheet') {
+            return viewSettings
+              ? transformStylesheet(text, width, height, viewSettings.vertical)
+              : text;
           }
-          return data;
+
+          const bookData = getBookData(bookKey);
+          if (!viewSettings || !bookData) return '';
+          const isSvg = policy.contentType === 'image/svg+xml';
+          const ctx: TransformContext = {
+            bookKey,
+            viewSettings,
+            width,
+            height,
+            isFixedLayout: bookData.isFixedLayout,
+            primaryLanguage: bookData.book?.primaryLanguage,
+            userLocale: getLocale(),
+            content: text,
+            contentType: policy.contentType,
+            sectionHref: detail.name,
+            transformers: isSvg
+              ? ['sanitizer']
+              : [
+                  'style',
+                  'punctuation',
+                  'footnote',
+                  'whitespace',
+                  'language',
+                  'sanitizer',
+                  'simplecc',
+                  'nbsp',
+                  'proofread',
+                  'warichu',
+                ],
+          };
+          return transformContent(ctx);
         })
         .catch((e) => {
           console.error(new Error(`Failed to load ${detail.name}`, { cause: e }));
@@ -393,11 +401,6 @@ const FoliateViewer: React.FC<{
         skipToNextSectionLabel: _('End of this section. Continue to the next.'),
       });
 
-      // Inline scripts in tauri platforms are not executed by default
-      if (viewSettings.allowScript && isTauriAppPlatform()) {
-        evalInlineScripts(detail.doc);
-      }
-
       // only call on load if we have highlighting turned on.
       if (viewSettings.codeHighlighting) {
         manageSyntaxHighlighting(detail.doc, viewSettings);
@@ -454,22 +457,6 @@ const FoliateViewer: React.FC<{
         registerSpeedListeners(detail.doc);
         registerBookmarkPullDoc(bookKey, detail.doc);
       }
-    }
-  };
-
-  const evalInlineScripts = (doc: Document) => {
-    if (doc.defaultView && doc.defaultView.frameElement) {
-      const iframe = doc.defaultView.frameElement as HTMLIFrameElement;
-      const scripts = doc.querySelectorAll('script:not([src])');
-      scripts.forEach((script, index) => {
-        const scriptContent = script.textContent || script.innerHTML;
-        try {
-          console.warn('Evaluating inline scripts in iframe');
-          iframe.contentWindow?.eval(scriptContent);
-        } catch (error) {
-          console.error(`Error executing iframe script ${index + 1}:`, error);
-        }
-      });
     }
   };
 
@@ -705,9 +692,7 @@ const FoliateViewer: React.FC<{
           url?: string;
           allow?: boolean;
         }>;
-        if (detail.isScript) {
-          detail.allow = viewSettings.allowScript ?? false;
-        }
+        enforceBookResourcePolicy(detail);
         if (isFontType(detail.type) && detail.href?.startsWith('fonts/')) {
           const fontFileName = detail.href.split('/').pop()?.toLowerCase();
           getAvailableFonts().forEach(async (font) => {

@@ -1,23 +1,47 @@
 import DOMPurify from 'dompurify';
+import { normalizeBookContentType } from '@/services/bookContentSecurity';
 import type { Transformer } from './types';
 // import { diff } from '@/utils/diff';
 
 const DOCTYPE_XHTML11 = `<!DOCTYPE html PUBLIC
 "-//W3C//DTD XHTML 1.1//EN"
 "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">`;
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+const EMPTY_SVG_DOCUMENT = `<?xml version="1.0" encoding="utf-8"?><svg xmlns="${SVG_NAMESPACE}"></svg>`;
 
 export const sanitizerTransformer: Transformer = {
   name: 'sanitizer',
 
   transform: async (ctx) => {
-    const allowScript = ctx.viewSettings.allowScript;
-    if (allowScript) return ctx.content;
-
     // Protect BiDi control characters that XMLSerializer encodes as numeric
     // character references, breaking Persian/Arabic text shaping. Both the
     // literal character and its numeric-entity form (produced by XMLSerializer)
     // must be restored to the literal after serialization, just like U+00A0.
     const result = ctx.content.replaceAll('&nbsp;', '&#160;');
+
+    // Foliate must retain same-origin DOM access for pagination, selection,
+    // annotations, and TTS. Scripted publication content therefore cannot be
+    // isolated safely and is always removed, including from legacy configs
+    // that still contain allowScript=true.
+    if (normalizeBookContentType(ctx.contentType) === 'image/svg+xml') {
+      const doc = new DOMParser().parseFromString(result, 'image/svg+xml');
+      if (
+        doc.querySelector('parsererror') ||
+        doc.documentElement.localName !== 'svg' ||
+        doc.documentElement.namespaceURI !== SVG_NAMESPACE
+      ) {
+        return EMPTY_SVG_DOCUMENT;
+      }
+      DOMPurify.sanitize(doc.documentElement, {
+        IN_PLACE: true,
+        USE_PROFILES: { svg: true, svgFilters: true },
+        FORBID_TAGS: ['script', 'iframe', 'object', 'embed'],
+        FORBID_ATTR: ['srcdoc'],
+        ALLOWED_URI_REGEXP:
+          /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|blob|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+      });
+      return '<?xml version="1.0" encoding="utf-8"?>' + new XMLSerializer().serializeToString(doc);
+    }
 
     const sanitized = DOMPurify.sanitize(result, {
       WHOLE_DOCUMENT: true,
