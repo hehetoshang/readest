@@ -12,6 +12,7 @@ export const transformContent = async (ctx: TransformContext): Promise<string> =
       transformed = await transformer.transform({ ...ctx, content: transformed });
     } catch (error) {
       console.warn(`Error in transformer ${transformer.name}:`, error);
+      if (transformer.name === 'sanitizer') throw error;
     }
   }
 

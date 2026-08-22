@@ -240,6 +240,7 @@ export interface BookLayout {
   vertical: boolean;
   rtl: boolean;
   scrollingOverlap: number;
+  /** @deprecated Scripted publication content is always blocked for security. */
   allowScript: boolean;
   hideScrollbar: boolean;
   /* Auto Scroll (#4998) speed as a percentage; 100 = AUTO_SCROLL_BASE_PX_PER_SEC. */
