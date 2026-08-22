@@ -1,7 +1,7 @@
 ---
 name: pdf-cbz-contrast-view-menu
 description: "Contrast option in View menu for fixed-layout (PDF/CBZ) docs; per-book, CSS filter"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 94f785c8-9015-4140-b64d-c6177e033189

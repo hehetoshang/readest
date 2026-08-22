@@ -1,7 +1,7 @@
 ---
 name: inline-block-column-overflow
 description: Foliate paginator fix — atomic-inline (inline-block) boxes too tall to fragment clip content in paginated mode
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: f0c35f7b-d4ff-4275-9f13-7019b0e167d9

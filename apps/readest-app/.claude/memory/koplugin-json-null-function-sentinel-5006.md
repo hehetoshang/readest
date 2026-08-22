@@ -1,7 +1,7 @@
 ---
 name: koplugin-json-null-function-sentinel-5006
 description: "koplugin push crash \"type 'function' is not supported by JSON\" — LuaJSON null sentinel is a function; dkjson (Spore) rejects it"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: deaa9622-cd2f-40d4-8b9e-8855cfbe8167

@@ -1,7 +1,7 @@
 ---
 name: dblclick-drag-pageturn-4524
 description: Web double-click-and-drag selection turned the page; deferred single-click fired mid-drag while button held
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5fe20151-9768-4e7c-9cee-2aa25da5318c

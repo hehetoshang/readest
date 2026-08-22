@@ -1,7 +1,7 @@
 ---
 name: tts-sync-chrome-verification
 description: Edge TTS DOES work in the claude-in-chrome browser (WebSpeech errors there); recipe to verify TTS-driven features live + the cross-realm CFI bug it exposed
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: c39202b7-d8c2-4150-a618-c31857a8ad73

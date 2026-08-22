@@ -1,7 +1,7 @@
 ---
 name: issue-4584-tap-death-investigation
 description: "#4584 single-taps-dead-after-picture-zoom: isPopuped self-heals (red herring), likely WebView-148-specific, plus Android emulator/CDP gesture-verification gotchas"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a41b6cab-c0f3-4740-a4c0-61a10b68fc09

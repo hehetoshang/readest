@@ -1,7 +1,7 @@
 ---
 name: tts-player-redesign
 description: TTS control redesigned to mini-player + Dialog player sheet (Apple Books/ElevenLabs style); replaces floating icon/popup/TTSBar; showTTSBar retired; PR #4996
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: d8af2d26-c714-44f4-b2f2-dfe08676fe87

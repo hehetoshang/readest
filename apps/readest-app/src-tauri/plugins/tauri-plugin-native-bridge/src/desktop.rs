@@ -79,9 +79,9 @@ impl<R: Runtime> NativeBridge<R> {
         Err(crate::Error::UnsupportedPlatformError)
     }
 
-    pub fn set_text_selection_suppressed(
+    pub fn set_selection_suppressed(
         &self,
-        _payload: SetTextSelectionSuppressedRequest,
+        _payload: SetSelectionSuppressedRequest,
     ) -> crate::Result<()> {
         Err(crate::Error::UnsupportedPlatformError)
     }
@@ -188,6 +188,27 @@ impl<R: Runtime> NativeBridge<R> {
         Err(crate::Error::UnsupportedPlatformError)
     }
 
+    pub fn has_ambient_light_sensor(&self) -> crate::Result<HasAmbientLightSensorResponse> {
+        Ok(HasAmbientLightSensorResponse {
+            available: false,
+            error: None,
+        })
+    }
+
+    pub fn start_ambient_light_updates(&self) -> crate::Result<AmbientLightUpdatesResponse> {
+        Ok(AmbientLightUpdatesResponse {
+            success: false,
+            error: Some("unsupported".to_string()),
+        })
+    }
+
+    pub fn stop_ambient_light_updates(&self) -> crate::Result<AmbientLightUpdatesResponse> {
+        Ok(AmbientLightUpdatesResponse {
+            success: true,
+            error: None,
+        })
+    }
+
     pub fn get_external_sdcard_path(&self) -> crate::Result<GetExternalSDCardPathResponse> {
         Err(crate::Error::UnsupportedPlatformError)
     }
@@ -213,6 +234,10 @@ impl<R: Runtime> NativeBridge<R> {
     }
 
     pub fn select_directory(&self) -> crate::Result<SelectDirectoryResponse> {
+        Err(crate::Error::UnsupportedPlatformError)
+    }
+
+    pub fn show_file_picker(&self) -> crate::Result<()> {
         Err(crate::Error::UnsupportedPlatformError)
     }
 
@@ -340,6 +365,15 @@ impl<R: Runtime> NativeBridge<R> {
         ))
     }
 
+    /// Share-Extension clip files only exist in the iOS App Group
+    /// container — desktop has no share extension.
+    pub fn read_share_clip_html(
+        &self,
+        _payload: ReadShareClipHtmlRequest,
+    ) -> crate::Result<ReadShareClipHtmlResponse> {
+        Ok(ReadShareClipHtmlResponse { html: None })
+    }
+
     // ── Keyed secure key-value store ────────────────────────────────────
     //
     // Same keychain backends + fail-loud/fail-soft contract as the sync
@@ -449,6 +483,39 @@ impl<R: Runtime> NativeBridge<R> {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = (window, payload);
+            Err(crate::Error::UnsupportedPlatformError)
+        }
+    }
+
+    /// Probe the iCloud ubiquity container. Non-macOS desktops report
+    /// unavailable rather than erroring: the JS side treats `available:
+    /// false` as "this backend cannot run here", the same shape as a Mac
+    /// without an iCloud session.
+    pub fn icloud_container_status(&self) -> crate::Result<ICloudContainerStatusResponse> {
+        #[cfg(target_os = "macos")]
+        {
+            crate::platform::macos::icloud_container_status()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Ok(ICloudContainerStatusResponse {
+                available: false,
+                documents_path: None,
+            })
+        }
+    }
+
+    pub fn icloud_ensure_downloaded(
+        &self,
+        payload: ICloudEnsureDownloadedRequest,
+    ) -> crate::Result<ICloudEnsureDownloadedResponse> {
+        #[cfg(target_os = "macos")]
+        {
+            crate::platform::macos::icloud_ensure_downloaded(payload)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = payload;
             Err(crate::Error::UnsupportedPlatformError)
         }
     }

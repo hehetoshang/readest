@@ -1,7 +1,7 @@
 ---
 name: sync-deleted-at-cursor-invariant
 description: Which /api/sync pull tables can drop the deleted_at OR (server-stamped updated_at) vs where it is load-bearing
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: ba4f6b55-ec46-46e7-bc54-9ddb45cba971

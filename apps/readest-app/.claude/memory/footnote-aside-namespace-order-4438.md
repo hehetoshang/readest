@@ -1,7 +1,7 @@
 ---
 name: footnote-aside-namespace-order-4438
 description: Footnote aside border line regression — @font-face inlined before @namespace invalidated the namespaced footnote-hiding selector
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 788943e6-fede-4c8f-828c-695ca873f178

@@ -1,7 +1,7 @@
 ---
 name: sync-statusless-book-rebump-4677
 description: Books with no reading status get re-pinned to top of library after every sync (updated_at rebump); PR
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: f943703d-f8c5-4ad9-9c2c-fc2c02d8b62c

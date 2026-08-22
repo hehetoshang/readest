@@ -19,6 +19,7 @@ import {
 } from '@/types/book';
 import {
   HardcoverSettings,
+  BookOrbitSettings,
   KOSyncSettings,
   LibraryGroupByType,
   LibrarySortByType,
@@ -30,6 +31,7 @@ import {
   GoogleDriveSettings,
   S3Settings,
   OneDriveSettings,
+  ICloudSettings,
 } from '@/types/settings';
 import { UserStorageQuota, UserDailyTranslationQuota } from '@/types/quota';
 import { getDefaultMaxBlockSize, getDefaultMaxInlineSize } from '@/utils/config';
@@ -79,12 +81,27 @@ export const DEFAULT_KOSYNC_SETTINGS = {
   enabled: false,
 } as KOSyncSettings;
 
+export const DEFAULT_BOOKORBIT_SETTINGS = {
+  enabled: false,
+  serverUrl: '',
+  username: '',
+  userkey: '',
+  deviceId: '',
+  deviceName: '',
+  strategy: 'prompt',
+  syncProgress: true,
+  syncNotes: true,
+  syncStats: true,
+  syncBookStates: true,
+} as BookOrbitSettings;
+
 export const READWISE_API_BASE_URL = 'https://readwise.io/api/v2';
 
 export const DEFAULT_READWISE_SETTINGS = {
   enabled: false,
   accessToken: '',
   lastSyncedAt: 0,
+  includeCoverImage: true,
 } as ReadwiseSettings;
 
 export const DEFAULT_TALEBOOK_SETTINGS = {
@@ -155,7 +172,19 @@ export const DEFAULT_ONEDRIVE_SETTINGS = {
   lastSyncedAt: 0,
 } as OneDriveSettings;
 
+export const DEFAULT_ICLOUD_SETTINGS = {
+  enabled: false,
+  syncProgress: true,
+  syncNotes: true,
+  syncBooks: false,
+  strategy: 'silent',
+  deviceId: '',
+  lastSyncedAt: 0,
+} as ICloudSettings;
+
 export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
+  // Retained for schema compatibility only; Moke never routes to Readest auth.
+  keepLogin: false,
   autoUpload: true,
   alwaysOnTop: false,
   openBookInNewWindow: true,
@@ -163,6 +192,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   autoCheckUpdates: true,
   updateChannel: 'stable',
   screenWakeLock: false,
+  autohideCursor: true,
   screenBrightness: -1, // -1~100, -1 for system default
   autoScreenBrightness: true,
   swipeBrightnessGesture: true,
@@ -185,11 +215,13 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   librarySortBy: LibrarySortByType.Updated,
   librarySortAscending: false,
   librarySortByAuto: true,
-  librarySortBy2: 'none',
+  libraryThenSortBy: 'none',
+  libraryThenSortAscending: true,
   libraryGroupBy: LibraryGroupByType.Group,
   libraryCoverFit: 'crop',
   libraryAutoColumns: true,
   libraryColumns: 6,
+  librarySkeuomorphicCovers: false,
   libraryRecentShelfEnabled: false,
 
   metadataSeriesCollapsed: false,
@@ -208,6 +240,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   },
 
   kosync: DEFAULT_KOSYNC_SETTINGS,
+  bookorbit: DEFAULT_BOOKORBIT_SETTINGS,
   talebook: DEFAULT_TALEBOOK_SETTINGS,
   readwise: DEFAULT_READWISE_SETTINGS,
   hardcover: DEFAULT_HARDCOVER_SETTINGS,
@@ -215,6 +248,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   googleDrive: DEFAULT_GOOGLE_DRIVE_SETTINGS,
   s3: DEFAULT_S3_SETTINGS,
   onedrive: DEFAULT_ONEDRIVE_SETTINGS,
+  icloud: DEFAULT_ICLOUD_SETTINGS,
   aiSettings: DEFAULT_AI_SETTINGS,
 
   lastSyncedAtBooks: 0,
@@ -262,7 +296,6 @@ export const DEFAULT_READSETTINGS: ReadSettings = {
   notebookWidth: '25%',
   isNotebookPinned: false,
   notebookActiveTab: 'notes',
-  autohideCursor: true,
   translationProvider: 'azure',
   translateTargetLang: 'EN',
   wordLensAutoDownload: true,
@@ -307,6 +340,7 @@ export const DEFAULT_BOOK_LAYOUT: BookLayout = {
   compactMarginRightPx: 16,
   gapPercent: 5,
   scrolled: false,
+  scrolledDirection: 'vertical',
   webtoonMode: false,
   noContinuousScroll: false,
   disableClick: false,
@@ -434,6 +468,7 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   ttsSentenceGap: DEFAULT_SENTENCE_GAP_SEC,
   ttsParagraphGap: DEFAULT_PARAGRAPH_GAP_SEC,
   ttsVoice: '',
+  ttsUseNarration: true,
   ttsLocation: '',
   ttsHighlightOptions: { style: 'highlight', color: '#808080' },
   ttsHighlightGranularity: 'word',
@@ -453,6 +488,8 @@ export const DEFAULT_NOTE_EXPORT_CONFIG: NoteExportConfig = {
   includeTitle: true,
   includeAuthor: true,
   includeDate: true,
+  // Off by default: including a cover publishes it to public storage.
+  includeCoverImage: false,
   includeChapterTitles: true,
   includeQuotes: true,
   includeNotes: true,
@@ -467,6 +504,7 @@ export const DEFAULT_NOTE_EXPORT_CONFIG: NoteExportConfig = {
   useCustomTemplate: false,
   customTemplate: '',
   exportAsPlainText: false,
+  exportFormat: 'markdown',
   excludedColors: [],
   excludedStyles: [],
 };
@@ -895,6 +933,9 @@ export const READEST_UPDATER_PUBKEY =
   'dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJFMEQ1QjE2OEU1NEIzNTEKUldSUnMxU09GbHNOdmpEaWFMT1crRFpEV2VORzQ2MklxaFc0M1R0ci9xY2c1bENXS0xhM1R1L2sK';
 
 export const READEST_PUBLIC_STORAGE_BASE_URL = 'https://storage.readest.com';
+// Custom domain serving the readest-public bucket; durable media assets
+// (e.g. published book covers) are linked through this host.
+export const READEST_PUBLIC_ASSETS_BASE_URL = 'https://assets.readest.com';
 
 export const READEST_OPDS_USER_AGENT = 'Readest/1.0 (OPDS Browser)';
 

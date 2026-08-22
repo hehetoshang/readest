@@ -1,7 +1,7 @@
 ---
 name: markdown-md-support-774
 description: Markdown (.md) reading via in-memory foliate book (no EPUB); split-at-H1; foliate book-object contract gotchas
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a82e979b-0edb-4964-91fd-3677ecfe5679

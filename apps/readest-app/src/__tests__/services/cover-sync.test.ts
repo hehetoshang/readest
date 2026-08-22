@@ -106,19 +106,13 @@ describe('uploadBookCover (issue #4544)', () => {
     vi.clearAllMocks();
   });
 
-  test('uploads only the cover to books/<hash>/cover.png and does not touch uploadedAt', async () => {
+  test('is inert and does not touch uploadedAt while Readest cloud sync is disabled', async () => {
     const fs = createMockFs();
     const book = createMockBook({ uploadedAt: 1000 });
     await uploadBookCover(fs, resolveFilePath, book);
-    expect(uploadFile).toHaveBeenCalledTimes(1);
-    // The cloud key is built inside uploadFileToCloud via
-    // fs.openFile(lfp, base, cfp). Assert the cover key was passed through.
-    expect(fs.openFile).toHaveBeenCalledWith(
-      'abc123/cover.png',
-      'Books',
-      'Readest/Books/abc123/cover.png',
-    );
-    expect(book.uploadedAt).toBe(1000); // unchanged
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(fs.openFile).not.toHaveBeenCalled();
+    expect(book.uploadedAt).toBe(1000);
   });
 
   test('no-ops when the cover is absent', async () => {

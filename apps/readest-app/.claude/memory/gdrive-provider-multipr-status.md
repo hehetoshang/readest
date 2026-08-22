@@ -1,7 +1,7 @@
 ---
 name: gdrive-provider-multipr-status
 description: "Google Drive file-sync provider — phased multi-PR build status, what shipped in PR1 and what each later PR adds"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 50e2c2b8-ca61-4c33-acae-cd5d2c9aa93f

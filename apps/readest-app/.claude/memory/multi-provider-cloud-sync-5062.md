@@ -1,7 +1,7 @@
 ---
 name: multi-provider-cloud-sync-5062
 description: "Multiple cloud sync providers at once (#5062) — PR #5122 open; independent selection replaces exclusive"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: fc15bc50-cc2c-4988-ab01-4e22b4047166

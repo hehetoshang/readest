@@ -1,7 +1,7 @@
 ---
 name: deploy-workers-dev-sni-proxy
 description: "pnpm deploy crashes in China — workers.dev SNI-blocked, wrangler ws WebSocket bypasses http_proxy; fix = NODE_OPTIONS preload"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 65342d98-7939-41ed-9e10-2efc466946b1

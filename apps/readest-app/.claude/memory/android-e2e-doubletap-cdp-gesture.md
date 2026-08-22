@@ -1,7 +1,7 @@
 ---
 name: android-e2e-doubletap-cdp-gesture
 description: Nightly Android E2E double-tap test failed since
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: eafe11ed-faac-4406-957d-1674353f081c

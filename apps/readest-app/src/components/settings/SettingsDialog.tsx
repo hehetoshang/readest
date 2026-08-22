@@ -119,7 +119,7 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       // 暴露 AI 配置入口（AI 提问功能依赖它），内嵌模式下始终显示。
       disabled:
         process.env.NODE_ENV === 'production' &&
-        !(typeof window !== 'undefined' && (window as any).__MOKE_EMBEDDED),
+        !(typeof window !== 'undefined' && window.__MOKE_EMBEDDED),
     },
     {
       tab: 'TTS',

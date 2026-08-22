@@ -1,7 +1,7 @@
 ---
 name: issue-4112-scroll-anchoring
 description: "Root cause for readest#4112 scrolled-mode backward-nav bugs — scroll-anchoring suppressed at scrollTop 0 when prepending a section"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: e0b11058-53ee-4554-a518-134f788823ee

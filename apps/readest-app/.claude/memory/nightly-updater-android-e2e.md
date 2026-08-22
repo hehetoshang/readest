@@ -1,7 +1,7 @@
 ---
 name: nightly-updater-android-e2e
 description: "How to E2E-test the nightly self-updater on a real Android (Xiaomi/HyperOS) device — devtools build, CDP-over-adb, MIUI install gates"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: b0c01e3c-9485-45fe-8ae3-eb5f2762f8fa

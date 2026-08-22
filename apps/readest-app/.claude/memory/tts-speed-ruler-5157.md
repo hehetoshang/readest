@@ -1,7 +1,7 @@
 ---
 name: tts-speed-ruler-5157
 description: PR
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5035aa03-7594-417d-8dab-df1dba7388de

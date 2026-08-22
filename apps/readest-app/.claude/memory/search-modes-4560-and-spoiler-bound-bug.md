@@ -1,6 +1,6 @@
 ---
 name: search-modes-4560-and-spoiler-bound-bug
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: c416114a-72e6-40ed-a3ed-4b2d5fd7d5f4

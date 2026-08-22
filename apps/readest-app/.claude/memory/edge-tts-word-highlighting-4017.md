@@ -1,7 +1,7 @@
 ---
 name: edge-tts-word-highlighting-4017
 description: "Edge TTS word-by-word highlighting (#4017, PR"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: afd9b381-c17d-4988-b287-07263d8bea0b

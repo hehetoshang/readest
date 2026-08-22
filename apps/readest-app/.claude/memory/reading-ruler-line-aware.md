@@ -1,7 +1,7 @@
 ---
 name: reading-ruler-line-aware
 description: "Line-aware/column-aware reading ruler — geometry pipeline, key files, and the Range.getClientRects block-box gotcha"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: f55c9971-c85f-44af-82c3-822e3bbd1129

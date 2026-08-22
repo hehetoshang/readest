@@ -1,7 +1,7 @@
 ---
 name: koplugin-note-deletion-sync
 description: "koplugin deleting a note didn't sync to Readest — push only walked live annotations; fixed with persisted tombstones"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: f3f6e25e-1bde-4e08-9fc9-c8184d1ef457

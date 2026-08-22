@@ -1,7 +1,7 @@
 ---
 name: tts-architecture-refactor-plan
 description: "TTS provider/cache refactor SHIPPED as PR#5126: SpeechProvider seam, per-book SQLite cache, section packs, premium-gated offline downloads"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 953eb6c3-86a7-43e6-b56e-5b14f2eacb28

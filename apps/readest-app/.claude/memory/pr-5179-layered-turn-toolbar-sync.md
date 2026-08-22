@@ -1,7 +1,7 @@
 ---
 name: pr-5179-layered-turn-toolbar-sync
 description: "#5179 + foliate#56 (toolbar sync with layered slide/curl turns, #5169) MERGED 2026-07-19 after local rebase; review found real defects that were NOT fixed before merge — open follow-up list inside"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: bfe3c4f3-8f81-46a7-876b-492fc006092b

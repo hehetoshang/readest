@@ -1,7 +1,7 @@
 ---
 name: list-view-series-overflow-4796
 description: "Library list view series + description text overlapped/clipped under fixed h-28, worsened by Android system font scaling"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 8645710b-673d-422a-ad8a-e3f385057f49

@@ -1,7 +1,7 @@
 ---
 name: middle-click-autoscroll-4951
 description: "Middle-click autoscroll in scrolled mode (#4951): Autoscroller RAF core + armed-books registry in iframeEventHandlers; scrolls via renderer.containerPosition"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: d8d21fc2-b63b-4f65-8ca8-f65d9e6b17b2

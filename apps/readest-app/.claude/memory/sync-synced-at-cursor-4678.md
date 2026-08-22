@@ -1,7 +1,7 @@
 ---
 name: sync-synced-at-cursor-4678
 description: "Decouple the incremental-pull cursor from updated_at via a server-stamped synced_at column on books (#4678)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 5c738b55-09d2-42ea-8af0-ca13dfe2de6e

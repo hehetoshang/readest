@@ -1,7 +1,7 @@
 ---
 name: webdav-serverurl-stranded-5141
 description: WebDAV serverUrl not synced for configured-but-disabled provider; plaintext seeded-snapshot vs encrypted push-hash asymmetry stranded connection metadata
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a1862d1a-c5cd-4b21-aed7-62a3290222ba
