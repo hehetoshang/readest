@@ -18,7 +18,15 @@ export const formatAppWindowTitle = (bookTitle?: string) => {
 };
 
 export const tauriSetWindowTitle = async (bookTitle?: string) => {
-  await getCurrentWindow().setTitle(formatAppWindowTitle(bookTitle));
+  try {
+    await getCurrentWindow().setTitle(formatAppWindowTitle(bookTitle));
+  } catch (error) {
+    // Updating the title is best-effort. During development the Next.js
+    // frontend can briefly run against an older native shell whose ACL does
+    // not grant set_title; do not turn that version skew into an unhandled
+    // rejection that interrupts the reader.
+    console.warn('Failed to update the window title:', error);
+  }
 };
 
 export const tauriGetWindowLogicalPosition = async () => {

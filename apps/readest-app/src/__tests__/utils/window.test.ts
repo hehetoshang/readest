@@ -221,4 +221,18 @@ describe('tauriSetWindowTitle', () => {
 
     expect(win.setTitle).toHaveBeenCalledWith('Readest');
   });
+
+  test('does not reject when the native shell cannot update the title', async () => {
+    const permissionError =
+      'window.set_title not allowed. Permissions associated with this command: core:window:allow-set-title';
+    const win = { setTitle: vi.fn().mockRejectedValue(permissionError) };
+    vi.mocked(getCurrentWindow).mockReturnValue(
+      win as unknown as ReturnType<typeof getCurrentWindow>,
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(tauriSetWindowTitle('The Hobbit')).resolves.toBeUndefined();
+
+    expect(warn).toHaveBeenCalledWith('Failed to update the window title:', permissionError);
+  });
 });
