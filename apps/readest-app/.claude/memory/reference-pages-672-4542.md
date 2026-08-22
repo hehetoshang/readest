@@ -1,7 +1,7 @@
 ---
 name: reference-pages-672-4542
 description: "Reference Pages progress style (#672 +"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 2a51b785-c6db-4bab-86f1-4a9b086a0e48

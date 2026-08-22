@@ -1,7 +1,7 @@
 ---
 name: toc-table-heading-clip-4439
 description: "#4400 scroll-wrapper overflow:auto clips negative-margin bleed of decorative layout tables; hoist negative margins onto wrapper"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 6d1d7362-d152-4248-93c0-76f6aef92329

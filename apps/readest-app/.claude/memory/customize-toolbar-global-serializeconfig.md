@@ -1,7 +1,7 @@
 ---
 name: customize-toolbar-global-serializeconfig
 description: Customize Toolbar applied per-book not global; root cause = serializeConfig compared viewSettings by reference (!==) so array values were always stored as stale per-book overrides
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: c6601464-9463-4ac3-99c0-e7527e4051b5

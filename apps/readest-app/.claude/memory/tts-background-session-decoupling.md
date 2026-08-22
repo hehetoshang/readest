@@ -1,7 +1,7 @@
 ---
 name: tts-background-session-decoupling
 description: Background TTS across book close (PR
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 97e57af9-5961-4c92-a63e-4582178bf798

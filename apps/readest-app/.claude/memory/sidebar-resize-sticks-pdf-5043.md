@@ -1,7 +1,7 @@
 ---
 name: sidebar-resize-sticks-pdf-5043
 description: "#5043 sidebar resize handle sticks to cursor over PDF; fixed-layout iframe pointer-events:auto defeats body pointer-events:none drag trick; fix = shield overlay in useDrag"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 552e8d48-49e4-4eb9-a8e2-89b5042bb9cf

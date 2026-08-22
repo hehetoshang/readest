@@ -1,7 +1,7 @@
 ---
 name: theorem-competitor-feature-analysis
 description: Theorem (fundaments-work/Theorem) is a near-identical Readest peer; feature gaps + the RSS-into-annotations reuse insight
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: f0615b09-f1d2-427b-a125-ebb49a77a5bd

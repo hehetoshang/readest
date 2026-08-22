@@ -1,7 +1,7 @@
 ---
 name: android-sideload-same-versioncode
 description: Android sideloaded APK reinstall allows EQUAL versionCode; only strictly-lower is blocked
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: a58a4eba-7a3c-4560-9b52-e3713c6ad211

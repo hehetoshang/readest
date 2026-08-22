@@ -24,7 +24,11 @@ use tauri_plugin_fs::FsExt;
 use tauri::{Listener, Url};
 mod clip_url;
 mod dir_scanner;
-#[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "windows",
+    all(target_os = "linux", not(target_env = "ohos"))
+))]
 mod discord_rpc;
 mod epub_parser;
 #[cfg(target_os = "macos")]
@@ -321,9 +325,7 @@ struct SingleInstancePayload {
 /// (`fs`, `http`, `os`, `shell`, `opener`), so they are intentionally NOT
 /// registered here — registering a plugin twice panics. This adds only the
 /// extra plugins the reader frontend relies on.
-pub fn register_reader_plugins(
-    builder: tauri::Builder<tauri::Wry>,
-) -> tauri::Builder<tauri::Wry> {
+pub fn register_reader_plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     let builder = builder
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -347,7 +349,11 @@ pub fn register_reader_plugins(
     // deps to `any(macos, windows, all(linux, not(ohos)))`, so the cfg here
     // must match exactly — `not(ohos)` alone would also compile them on
     // iOS/Android where the crates don't exist.
-    #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "windows",
+        all(target_os = "linux", not(target_env = "ohos"))
+    ))]
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init());
@@ -368,14 +374,22 @@ pub fn register_reader_protocols(
 
 /// Manage reader-related app state (currently the Discord Rich Presence
 /// client). Call once from the host app's `setup`.
-#[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "windows",
+    all(target_os = "linux", not(target_env = "ohos"))
+))]
 pub fn manage_reader_state(app: &AppHandle) {
     use std::sync::{Arc, Mutex};
     let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));
     app.manage(discord_client);
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos")))))]
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "windows",
+    all(target_os = "linux", not(target_env = "ohos"))
+)))]
 pub fn manage_reader_state(_app: &AppHandle) {}
 
 /// Open a reader window that loads the embedded readest frontend (served by
@@ -441,6 +455,18 @@ pub fn open_reader_window(
     moke_book_id: Option<String>,
     restore_progress: Option<serde_json::Value>,
 ) -> Result<(), String> {
+    open_reader_window_with_debug(app, file, eink, false, moke_book_id, restore_progress)
+}
+
+#[cfg(desktop)]
+fn open_reader_window_with_debug(
+    app: &AppHandle,
+    file: Option<PathBuf>,
+    eink: bool,
+    debug_panel: bool,
+    moke_book_id: Option<String>,
+    restore_progress: Option<serde_json::Value>,
+) -> Result<(), String> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static READER_SEQ: AtomicUsize = AtomicUsize::new(0);
 
@@ -457,7 +483,9 @@ pub fn open_reader_window(
         if is_reader_scope_grantable(books_dir.ok().as_deref(), app.fs_scope().is_allowed(f), f) {
             allow_file_in_scopes(app, vec![f.clone()]);
         } else {
-            log::warn!("open_reader refused scope grant for path outside books dir / fs_scope: {f:?}");
+            log::warn!(
+                "open_reader refused scope grant for path outside books dir / fs_scope: {f:?}"
+            );
         }
     }
 
@@ -475,14 +503,17 @@ pub fn open_reader_window(
     // ponytail: host (Moke) forwards its e-ink toggle so the embedded reader
     // boots in e-ink mode on devices the CSS media query can't detect (desktop WebView).
     let eink_js = if eink { "true" } else { "false" };
+    let debug_panel_js = if debug_panel { "true" } else { "false" };
     let moke_book_id_js = serde_json::to_string(&moke_book_id).map_err(|e| e.to_string())?;
-    let restore_progress_js = serde_json::to_string(&restore_progress).map_err(|e| e.to_string())?;
+    let restore_progress_js =
+        serde_json::to_string(&restore_progress).map_err(|e| e.to_string())?;
 
     let init_script = format!(
         r#"
             window.OPEN_WITH_FILES = {files_js};
             window.__MOKE_EMBEDDED = true;
             window.__MOKE_EINK = {eink_js};
+            window.__MOKE_DEBUG_PANEL = {debug_panel_js};
             window.__MOKE_BOOK_ID = {moke_book_id_js};
             window.__MOKE_RESTORE_PROGRESS = {restore_progress_js};
             window.addEventListener('DOMContentLoaded', function() {{
@@ -533,13 +564,15 @@ async fn open_reader(
     app: AppHandle,
     file_path: String,
     eink: bool,
+    debug_panel: Option<bool>,
     moke_book_id: Option<String>,
     restore_progress: Option<serde_json::Value>,
 ) -> Result<(), String> {
-    open_reader_window(
+    open_reader_window_with_debug(
         &app,
         Some(PathBuf::from(file_path)),
         eink,
+        debug_panel.unwrap_or(false),
         moke_book_id,
         restore_progress,
     )
@@ -571,9 +604,17 @@ pub fn reader_invoke_handler(
         epub_parser::parse_epub_full,
         mobi_parser::parse_mobi_metadata,
         mobi_parser::extract_mobi_cover_full,
-        #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+        #[cfg(any(
+            target_os = "macos",
+            target_os = "windows",
+            all(target_os = "linux", not(target_env = "ohos"))
+        ))]
         discord_rpc::update_book_presence,
-        #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+        #[cfg(any(
+            target_os = "macos",
+            target_os = "windows",
+            all(target_os = "linux", not(target_env = "ohos"))
+        ))]
         discord_rpc::clear_book_presence,
         clip_url::clip_url,
     ]
@@ -694,9 +735,17 @@ pub fn run() {
             macos::traffic_light::set_traffic_lights,
             #[cfg(target_os = "macos")]
             macos::system_dictionary::show_lookup_popover,
-            #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+            #[cfg(any(
+                target_os = "macos",
+                target_os = "windows",
+                all(target_os = "linux", not(target_env = "ohos"))
+            ))]
             discord_rpc::update_book_presence,
-            #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+            #[cfg(any(
+                target_os = "macos",
+                target_os = "windows",
+                all(target_os = "linux", not(target_env = "ohos"))
+            ))]
             discord_rpc::clear_book_presence,
             clip_url::clip_url,
             #[cfg(desktop)]
@@ -715,7 +764,11 @@ pub fn run() {
 
     // Desktop-only (see Cargo.toml): the dialog (rfd) and clipboard-manager
     // (arboard) backends are not available on mobile / OHOS.
-    #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "windows",
+        all(target_os = "linux", not(target_env = "ohos"))
+    ))]
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init());
@@ -768,6 +821,9 @@ pub fn run() {
     let builder = builder.plugin(macos::traffic_light::init());
 
     #[cfg(target_os = "macos")]
+    let builder = builder.plugin(macos::window::init());
+
+    #[cfg(target_os = "macos")]
     let builder = builder.plugin(macos::safari_auth::init());
 
     #[cfg(target_os = "ios")]
@@ -797,7 +853,11 @@ pub fn run() {
                 use tauri::Manager;
                 app.add_capability(include_str!("../capabilities-extra/webdriver.json"))?;
             }
-            #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", not(target_env = "ohos"))))]
+            #[cfg(any(
+                target_os = "macos",
+                target_os = "windows",
+                all(target_os = "linux", not(target_env = "ohos"))
+            ))]
             {
                 use std::sync::{Arc, Mutex};
                 let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));
@@ -939,11 +999,14 @@ pub fn run() {
             #[cfg(all(not(target_os = "macos"), desktop))]
             let win_builder = win_builder.inner_size(800.0, 600.0).resizable(true);
 
+            // The overlay title bar draws its title over the app's own header,
+            // so `macos::window::init()` hides the title text and the window
+            // can carry a real name for the Window menu and VoiceOver.
             #[cfg(target_os = "macos")]
             let win_builder = win_builder
                 .decorations(true)
                 .title_bar_style(TitleBarStyle::Overlay)
-                .title("");
+                .title("Readest");
 
             #[cfg(all(not(target_os = "macos"), desktop))]
             let win_builder = {
@@ -984,26 +1047,29 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
                 let window = win_builder.build().unwrap();
-                // On macOS, closing a window (via Cmd+W or the red traffic light) should
-                // not quit the app — only Cmd+Q should. Hide the window instead so the
-                // app keeps running in the dock, and restore it when the user reopens
-                // the app from the dock.
+                // On macOS, closing a window (via Cmd+W or the red traffic light)
+                // should not quit the app — only Cmd+Q should — and normally hides
+                // instead of minimizing (#5240): the app keeps running in the dock
+                // and the window is restored when the user reopens the app from the
+                // dock. On Tahoe the hide is defensive against the `orderOut:`
+                // phantom-window regression (#4875); see
+                // `macos::window::hide_main_window` for the fullscreen-failure
+                // fallback.
                 let window_for_close = window.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                window.on_window_event(move |event| match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
                         api.prevent_close();
-                        // macOS 26 (Tahoe) regressed `NSWindow` ordering: `orderOut:`
-                        // (what `hide()` maps to) can leave a focused black phantom
-                        // window on screen instead of hiding it (#4875). Minimize
-                        // instead on Tahoe — a different AppKit path that still keeps
-                        // the app in the dock and preserves the open book. The Reopen
-                        // handler below already unminimizes on dock reopen.
-                        if macos::os_version::is_macos_tahoe_or_later() {
-                            let _ = window_for_close.minimize();
-                        } else {
-                            let _ = window_for_close.hide();
-                        }
+                        macos::window::hide_main_window(&window_for_close);
                     }
+                    // Safety net for JS-side `show()` callers (e.g.
+                    // `ensureMainLibraryWindow` in src/utils/nav.ts re-shows a hidden
+                    // main window from a reader window without a dock Reopen): the
+                    // window can only become key after it is back on screen, so any
+                    // pending defensively-zeroed frame must be restored by now.
+                    tauri::WindowEvent::Focused(true) => {
+                        macos::window::restore_main_window_frame(&window_for_close);
+                    }
+                    _ => {}
                 });
             }
 
@@ -1042,9 +1108,21 @@ pub fn run() {
                         ..
                     } => {
                         if let Some(window) = app_handle.get_webview_window("main") {
+                            // Undo a pending Tahoe defensive hide (zeroed frame) before
+                            // showing so the window reappears at its real position and
+                            // size. No-op when the window was hidden plainly.
+                            macos::window::restore_main_window_frame(&window);
                             let _ = window.show();
                             let _ = window.set_focus();
                             let _ = window.unminimize();
+                        }
+                    }
+                    // A programmatic exit emits ExitRequested before the window-state
+                    // plugin performs its final save. Restore any zeroed frame while
+                    // the window is still hidden so live geometry remains valid.
+                    tauri::RunEvent::ExitRequested { .. } => {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            macos::window::restore_main_window_frame(&window);
                         }
                     }
                     _ => {}

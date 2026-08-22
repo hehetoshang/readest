@@ -38,10 +38,12 @@ export const BACKUP_SETTINGS_BLACKLIST = [
   'customRootDir',
   'externalLibraryFolders',
   'autoImportFolders',
+  'autoImportFlattenFolders',
   'savedBookCoverForLockScreenPath',
   // Per-device identity — restoring causes sync identity / HLC collisions.
   'replicaDeviceId',
   'kosync.deviceId',
+  'bookorbit.deviceId',
   // Sync cursors — stale values make sync skip pulls or re-push everything.
   'lastSyncedAtBooks',
   'lastSyncedAtConfigs',
@@ -62,6 +64,9 @@ export const BACKUP_SETTINGS_BLACKLIST = [
   's3.deviceId',
   's3.lastSyncedAt',
   's3.providerSelectedAt',
+  'icloud.deviceId',
+  'icloud.lastSyncedAt',
+  'icloud.providerSelectedAt',
   'readestCloud.disabledAt',
   // Transient runtime state — book keys may not exist post-restore; screen
   // brightness is live device state.
@@ -82,6 +87,9 @@ export const BACKUP_SETTINGS_CREDENTIAL_FIELDS = [
   'kosync.username',
   'kosync.userkey',
   'kosync.password',
+  'bookorbit.username',
+  'bookorbit.userkey',
+  'bookorbit.password',
   'readwise.accessToken',
   'talebook.username',
   'talebook.accessToken',

@@ -1,7 +1,7 @@
 ---
 name: koplugin-stats-sync
 description: KOReader readest.koplugin reading-stats sync (push on close / pull on open); 3-bug chain fixed in PR
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9b3eaf27-8688-4293-ab42-f635af2e1905

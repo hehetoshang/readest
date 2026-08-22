@@ -1,7 +1,7 @@
 ---
 name: save-image-to-gallery-android
 description: Image-viewer Save button → Android MediaStore (not share); sharekit 0-byte self-copy bug; tsgo misses abstract conformance
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: d72184f1-0e4c-412b-9dc9-fb384e189427

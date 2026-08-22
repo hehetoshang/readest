@@ -1,7 +1,7 @@
 ---
 name: webdav-metadata-sync-4756
 description: WebDAV syncLibrary never refreshed metadata for already-local books; LWW reconciliation on book.updatedAt
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a9e2f86a-c773-4f5d-95d7-4451d332de5d

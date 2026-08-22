@@ -1,7 +1,7 @@
 ---
 name: paginator-gutter-bleed-asymmetry-4394
 description: "Paginated page background overflowed its column into the outer --_outer-min gutter (asymmetric on mixed spreads); fix = clamp computeBackgroundSegments to the content area, keep the grid"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 108a70bd-5af9-4a31-9b93-9d6df7637579

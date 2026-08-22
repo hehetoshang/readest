@@ -1,7 +1,7 @@
 ---
 name: android-bg-tts-media-session-fix
 description: Android background TTS regression - startService() dies backgrounded; use in-process service calls; + lock-screen scrubber/seek
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 052bb3f3-27fe-4eb0-95c3-699a3122083a

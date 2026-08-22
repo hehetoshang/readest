@@ -1,7 +1,7 @@
 ---
 name: ios-spm-sentry-proxy-tls-download
 description: "iOS build \"Resolve Package Graph\" hangs downloading Sentry xcframeworks - proxy breaks TLS 1.3; manual download + workspace-state.json inject"
-metadata: 
+metadata:
   node_type: memory
   type: reference
   originSessionId: 953eb6c3-86a7-43e6-b56e-5b14f2eacb28

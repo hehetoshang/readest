@@ -1,7 +1,7 @@
 ---
 name: grimmory-native-sync
 description: Grimmory (Booklore fork) sync API surface + CORS analysis for adding native grimmory sync to Readest
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: ef2f9371-2968-4f81-abe4-a9349547542b

@@ -1,7 +1,7 @@
 ---
 name: opds-firefox-strict-xml-4479
 description: OPDS feeds fail on Firefox but work on Chrome — strict DOMParser parsererror on junk after root; parseOPDSXML recovery
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9539d003-7df3-4643-99ca-bdee69be1b3f

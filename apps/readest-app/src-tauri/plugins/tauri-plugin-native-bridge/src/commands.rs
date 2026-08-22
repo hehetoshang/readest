@@ -47,11 +47,19 @@ pub(crate) async fn use_background_audio<R: Runtime>(
 }
 
 #[command]
-pub(crate) async fn set_text_selection_suppressed<R: Runtime>(
+pub(crate) async fn set_selection_suppressed<R: Runtime>(
     app: AppHandle<R>,
-    payload: SetTextSelectionSuppressedRequest,
+    payload: SetSelectionSuppressedRequest,
 ) -> Result<()> {
-    app.native_bridge().set_text_selection_suppressed(payload)
+    app.native_bridge().set_selection_suppressed(payload)
+}
+
+#[command]
+pub(crate) async fn read_share_clip_html<R: Runtime>(
+    app: AppHandle<R>,
+    payload: ReadShareClipHtmlRequest,
+) -> Result<ReadShareClipHtmlResponse> {
+    app.native_bridge().read_share_clip_html(payload)
 }
 
 #[command]
@@ -168,6 +176,27 @@ pub(crate) async fn set_screen_brightness<R: Runtime>(
 }
 
 #[command]
+pub(crate) async fn has_ambient_light_sensor<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<HasAmbientLightSensorResponse> {
+    app.native_bridge().has_ambient_light_sensor()
+}
+
+#[command]
+pub(crate) async fn start_ambient_light_updates<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<AmbientLightUpdatesResponse> {
+    app.native_bridge().start_ambient_light_updates()
+}
+
+#[command]
+pub(crate) async fn stop_ambient_light_updates<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<AmbientLightUpdatesResponse> {
+    app.native_bridge().stop_ambient_light_updates()
+}
+
+#[command]
 pub(crate) async fn get_external_sdcard_path<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<GetExternalSDCardPathResponse> {
@@ -213,6 +242,11 @@ pub(crate) async fn select_directory<R: Runtime>(
     }
 
     Ok(result)
+}
+
+#[command]
+pub(crate) async fn show_file_picker<R: Runtime>(app: AppHandle<R>) -> Result<()> {
+    app.native_bridge().show_file_picker()
 }
 
 #[command]
@@ -311,4 +345,19 @@ pub(crate) async fn capture_webview_region<R: Runtime>(
         .native_bridge()
         .capture_webview_region(&window, payload)?;
     Ok(tauri::ipc::Response::new(png))
+}
+
+#[command]
+pub(crate) async fn icloud_container_status<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<ICloudContainerStatusResponse> {
+    app.native_bridge().icloud_container_status()
+}
+
+#[command]
+pub(crate) async fn icloud_ensure_downloaded<R: Runtime>(
+    app: AppHandle<R>,
+    payload: ICloudEnsureDownloadedRequest,
+) -> Result<ICloudEnsureDownloadedResponse> {
+    app.native_bridge().icloud_ensure_downloaded(payload)
 }

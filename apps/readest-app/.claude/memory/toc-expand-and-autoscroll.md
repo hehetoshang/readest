@@ -1,7 +1,7 @@
 ---
 name: toc-expand-and-autoscroll
 description: TOC sidebar auto-expansion policy + the Virtuoso scrollToIndex-after-expansion race that breaks the initial scroll-to-current-chapter
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 4d4eefcb-324a-4342-9472-9dae7cc57b41

@@ -1,7 +1,7 @@
 ---
 name: ios-widget-cover-bright-edge-line
 description: iOS reading widget cover sometimes had a bright hairline at the right edge from fractional resize; round target to whole pixels
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: fc6acdd3-a3d1-4823-a5c4-7fe75686fc93

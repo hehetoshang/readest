@@ -140,9 +140,11 @@ const shouldInjectRuntimeConfig = process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'w
 const mokeLaunchContextScript = `(${bootstrapMokeLaunchContext.toString()})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Browser extensions can inject attributes on <html> before React hydrates it.
   return (
     <html
       lang='en'
+      suppressHydrationWarning
       className={process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'tauri' ? 'edge-to-edge' : ''}
     >
       <head>

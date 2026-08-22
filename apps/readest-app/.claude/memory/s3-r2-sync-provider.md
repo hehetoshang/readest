@@ -1,7 +1,7 @@
 ---
 name: s3-r2-sync-provider
 description: "S3/R2 file-sync provider (third backend after WebDAV/GDrive) — full vertical slice on dev, uncommitted; aws4fetch SigV4, path-style, generic S3-compatible"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 894e0d6d-ce01-402b-8f2d-0f0670986a88

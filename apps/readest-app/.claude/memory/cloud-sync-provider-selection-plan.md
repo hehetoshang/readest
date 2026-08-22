@@ -1,7 +1,7 @@
 ---
 name: cloud-sync-provider-selection-plan
 description: "APPROVED /autoplan-reviewed plan making third-party sync (WebDAV/Drive) a first-class selectable provider; quota scoped to Readest Cloud (#4959/#4380)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: c0549d91-7f40-46a8-b110-628964be195b

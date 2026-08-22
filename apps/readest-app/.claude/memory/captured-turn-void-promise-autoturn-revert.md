@@ -1,7 +1,7 @@
 ---
 name: captured-turn-void-promise-autoturn-revert
 description: "Nightly android-e2e corner-dwell failure root cause - captured turn (#4940) wrapped view.next/prev with `void capturedTurn(...)`, discarding the turn promise; auto-turn guard collapsed and the"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 353e9c4d-b3c6-4eeb-9bf1-8254615b2d3d

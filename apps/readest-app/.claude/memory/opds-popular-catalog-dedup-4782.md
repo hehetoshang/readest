@@ -1,7 +1,7 @@
 ---
 name: opds-popular-catalog-dedup-4782
 description: "Added popular OPDS catalog still showed in Popular section (looked like a duplicate); filter it out, not just hide its Add button"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: fd07b2a4-290b-4f10-a01d-190281571221

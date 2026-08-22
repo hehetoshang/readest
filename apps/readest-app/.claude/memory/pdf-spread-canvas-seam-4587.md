@@ -1,7 +1,7 @@
 ---
 name: pdf-spread-canvas-seam-4587
 description: PDF two-page spread shows a 1px white bar at the spine on fractional devicePixelRatio (Windows 150%); canvas bitmap truncation
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9c176878-7bcd-4411-8c55-5ebce094a73b

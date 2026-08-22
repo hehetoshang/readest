@@ -10,6 +10,10 @@ export const sanitizerTransformer: Transformer = {
   name: 'sanitizer',
 
   transform: async (ctx) => {
+    // Protect BiDi control characters that XMLSerializer encodes as numeric
+    // character references, breaking Persian/Arabic text shaping. Both the
+    // literal character and its numeric-entity form (produced by XMLSerializer)
+    // must be restored to the literal after serialization, just like U+00A0.
     const result = ctx.content.replaceAll('&nbsp;', '&#160;');
 
     // Foliate must retain same-origin DOM access for pagination, selection,
@@ -63,7 +67,13 @@ export const sanitizerTransformer: Transformer = {
 
     const serializer = new XMLSerializer();
     let serialized = serializer.serializeToString(sanitized);
-    serialized = serialized.replaceAll('&#160;', '&nbsp;').replaceAll('\u00A0', '&nbsp;');
+    serialized = serialized
+      .replaceAll('&#160;', '&nbsp;')
+      .replaceAll('\u00A0', '&nbsp;')
+      .replaceAll('&#x200e;', '\u200E')
+      .replaceAll('&#8206;', '\u200E')
+      .replaceAll('&#x200f;', '\u200F')
+      .replaceAll('&#8207;', '\u200F');
     serialized = '<?xml version="1.0" encoding="utf-8"?>' + DOCTYPE_XHTML11 + serialized;
     serialized = serialized.replace(/(<head[^>]*>)/i, '\n$1');
     serialized = serialized.replace(/(<\/body>)(<\/html>)/i, '$1\n$2');

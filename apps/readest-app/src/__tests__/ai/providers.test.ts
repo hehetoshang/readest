@@ -270,6 +270,7 @@ describe('OpenRouterProvider', () => {
     const model = provider.getEmbeddingModel();
     // No HTTP call is made — the placeholder model fails fast with an
     // actionable message instead of an opaque "Invalid JSON response".
+    if (typeof model === 'string') throw new Error('Expected an embedding model instance');
     await expect(model.doEmbed({ values: ['hello'] })).rejects.toThrow(
       /Embedding model not configured/,
     );

@@ -1,7 +1,7 @@
 ---
 name: opds-preemptive-basic-digest-400
 description: "Calibre digest/'auto' servers 400 the preemptive Basic header from PR #4206; fetchWithAuth must bare-retry on 400 to surface the Digest challenge"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 9066b80b-3cb5-44df-9c4b-7f609cf285a5

@@ -1,7 +1,7 @@
 ---
 name: verify-format-check-gate
 description: pnpm format:check (Biome formatter) is a CI + pre-push gate that pnpm lint does NOT cover; run it before pushing
-metadata: 
+metadata:
   node_type: memory
   type: feedback
   originSessionId: 04b03aab-c891-44f8-9ab0-8e0e757d2521

@@ -1,7 +1,7 @@
 ---
 name: hardcover-progress-edition-id-4792
 description: Hardcover progress sync parse-failed — edition_id falls back to book_id; invalid edition rejected by Hasura Action
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 6273b46d-b22d-4d48-9295-7420b251a197

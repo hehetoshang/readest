@@ -1,7 +1,7 @@
 ---
 name: toc-current-position-row
 description: "TOC \"Current position\" row showing the live reading page under the active item"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 7c3a3d3c-86fe-4f6a-b539-8bf8052d68bd

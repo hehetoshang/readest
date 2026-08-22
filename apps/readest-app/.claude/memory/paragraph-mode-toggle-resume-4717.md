@@ -1,7 +1,7 @@
 ---
 name: paragraph-mode-toggle-resume-4717
 description: "Paragraph mode (#4717) Shift+P double-toggle, dialog key handling, and chapter-start rewind — root causes + reusable gotchas (eventDispatcher re-entrancy, foliate lastLocation vs store progress)"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: a19a021a-0e84-4bf6-bde4-02b115b6306f

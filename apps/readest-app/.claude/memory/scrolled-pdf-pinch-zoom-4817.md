@@ -1,7 +1,7 @@
 ---
 name: scrolled-pdf-pinch-zoom-4817
 description: Scrolled-PDF live pinch-zoom + the cross-page-pinch vs native-selection tradeoff (readest
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 902324ba-94ee-4c88-804e-ea9f796681f9

@@ -1,7 +1,7 @@
 ---
 name: scrolled-header-title-center-4436
 description: "Scrolled-mode header chapter title lagged because getVisibleRange picked the topmost sliver view, not the viewport-center section"
-metadata: 
+metadata:
   node_type: memory
   type: project
   originSessionId: 0c504495-68fe-4a26-b314-644bbc496581
