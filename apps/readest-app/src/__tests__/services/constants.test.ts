@@ -255,6 +255,7 @@ describe('services/constants', () => {
         font: true,
         texture: true,
         opds_catalog: true,
+        abs_server: true,
         settings: true,
       });
     });

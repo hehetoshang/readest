@@ -26,6 +26,7 @@ export class ReaderPage extends BasePage {
   readonly proofreadPopup: Locator;
   readonly noteEditor: Locator;
   readonly annotationItems: Locator;
+  readonly rangeHandles: Locator;
   readonly pageJumpInput: Locator;
 
   constructor(page: Page) {
@@ -49,6 +50,9 @@ export class ReaderPage extends BasePage {
     this.proofreadPopup = page.locator('.popup-container:has-text("Selected text:")');
     this.noteEditor = page.locator('.note-editor-container');
     this.annotationItems = page.locator('li.booknote-item[role="button"]');
+    // The app-drawn range-edit handles (the selection / annotation range
+    // editors), as opposed to the browser's native selection handles.
+    this.rangeHandles = page.locator('[data-testid="selection-handle"]');
   }
 
   /** Wait until the reader route is active and the book viewer has mounted. */
@@ -155,12 +159,23 @@ export class ReaderPage extends BasePage {
   // --- reader settings ---
 
   /**
+   * Open the settings dialog from the header's view menu. The header used to
+   * carry a dedicated "Font & Layout" button, but it duplicated the mobile
+   * footer's Font tab and was removed (#5652); the view menu's "Settings"
+   * entry is the header's remaining route into the dialog.
+   */
+  async openSettings(): Promise<void> {
+    await this.revealHeader();
+    await this.headerBar.locator('button[aria-label="View Options"]').click();
+    await this.page.locator('.view-menu').getByText('Settings', { exact: true }).click();
+  }
+
+  /**
    * Open the settings dialog, increase the default font size by one step,
    * and return the value before and after.
    */
   async increaseFontSize(): Promise<{ before: string; after: string }> {
-    await this.revealHeader();
-    await this.headerBar.locator('button[aria-label="Font & Layout"]').click();
+    await this.openSettings();
     await this.page.locator('[data-tab="Font"]').click();
 
     const row = this.page.locator('[data-setting-id="settings.font.defaultFontSize"]');
@@ -180,8 +195,7 @@ export class ReaderPage extends BasePage {
    * Settings -> Behavior -> Customize Toolbar, by its chip label.
    */
   async enableAnnotationTool(name: string): Promise<void> {
-    await this.revealHeader();
-    await this.headerBar.locator('button[aria-label="Font & Layout"]').click();
+    await this.openSettings();
     await this.page.locator('[data-tab="Control"]').click();
     await this.page.locator('[data-setting-id="settings.control.customizeToolbar"]').click();
     await this.page.getByRole('button', { name, exact: true }).click();
@@ -194,8 +208,7 @@ export class ReaderPage extends BasePage {
    * margin, right under the header bar's hover strip.
    */
   async setPageHeaderVisible(visible: boolean): Promise<void> {
-    await this.revealHeader();
-    await this.headerBar.locator('button[aria-label="Font & Layout"]').click();
+    await this.openSettings();
     await this.page.locator('[data-tab="Layout"]').click();
 
     const toggle = this.page
@@ -380,6 +393,62 @@ export class ReaderPage extends BasePage {
     await this.annotationPopup.waitFor({ state: 'visible' });
   }
 
+  /**
+   * Select a single word of book text.
+   *
+   * The instant quick action only fires for a single lookup term, and it fires
+   * off the selection itself — so unlike {@link selectText} this waits for no
+   * popup, leaving the spec to say which one it expects.
+   */
+  async selectWord(): Promise<void> {
+    await this.openTocChapter(3);
+    const frame = await this.visibleSectionFrame();
+
+    await frame.locator('body').evaluate(() => {
+      const paragraphs = Array.from(document.querySelectorAll('p'));
+      const target = paragraphs.find((p) => (p.textContent ?? '').trim().length > 60);
+      if (!target) {
+        throw new Error('no selectable paragraph in the visible section');
+      }
+      const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+      let textNode = walker.nextNode();
+      let word: { node: Node; start: number; end: number } | null = null;
+      while (textNode && !word) {
+        const text = textNode.textContent ?? '';
+        const match = /[A-Za-z]{4,}/.exec(text);
+        if (match) {
+          word = { node: textNode, start: match.index, end: match.index + match[0].length };
+        }
+        textNode = walker.nextNode();
+      }
+      if (!word) {
+        throw new Error('no single word found in the target paragraph');
+      }
+      const range = document.createRange();
+      range.setStart(word.node, word.start);
+      range.setEnd(word.node, word.end);
+      const selection = document.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+  }
+
+  /** The text currently selected inside the on-screen book section. */
+  async selectedSectionText(): Promise<string> {
+    const frame = await this.visibleSectionFrame();
+    return frame.locator('body').evaluate(() => document.getSelection()?.toString() ?? '');
+  }
+
+  /**
+   * Turn on an instant quick action (`Instant Dictionary`, `Instant Highlight`,
+   * …) from the header bar's quick-action dropdown.
+   */
+  async setQuickAction(action: string): Promise<void> {
+    await this.revealHeader();
+    await this.headerBar.getByRole('button', { name: 'Enable Quick Action on Selection' }).click();
+    await this.page.getByRole('menuitem', { name: `Instant ${action}` }).click();
+  }
+
   /** A tool button inside the annotation popup, by its accessible name. */
   popupTool(name: string | RegExp): Locator {
     return this.annotationPopup.getByRole('button', { name });
@@ -387,6 +456,31 @@ export class ReaderPage extends BasePage {
 
   async highlightSelection(): Promise<void> {
     await this.popupTool('Highlight').click();
+  }
+
+  /**
+   * Click the first highlight drawn in the book, opening its toolbar and
+   * range editor.
+   *
+   * The overlay is an SVG laid over its section iframe in that iframe's own
+   * client coordinates, so a point just inside the highlight path's top-left
+   * corner (the start of its first line — {@link selectText} selects from a
+   * paragraph start) is a point on the highlighted text in that document. The
+   * click is dispatched there rather than through the page mouse, so it also
+   * reaches a highlight in a prerendered section that is not on screen.
+   */
+  async clickHighlight(): Promise<void> {
+    const overlay = this.foliateView.locator('svg g path').first();
+    await overlay.waitFor({ state: 'attached' });
+    await overlay.evaluate((node) => {
+      const path = node as SVGPathElement;
+      const box = path.getBBox();
+      const doc = path.ownerSVGElement?.parentElement?.querySelector('iframe')?.contentDocument;
+      if (!doc) throw new Error('highlight overlay has no section document');
+      doc.dispatchEvent(
+        new MouseEvent('click', { clientX: box.x + 4, clientY: box.y + 4, bubbles: true }),
+      );
+    });
   }
 
   async selectHighlightColor(color: string): Promise<void> {

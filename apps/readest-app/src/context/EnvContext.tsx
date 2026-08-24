@@ -19,9 +19,17 @@ export const EnvProvider = ({ children }: { children: ReactNode }) => {
   React.useEffect(() => {
     // Moke does not provide a Readest cloud account. Keep the embedded reader
     // local-only and skip replica initialization, auto-sync, and cloud I/O.
-    envConfig.getAppService().then((service) => {
-      setAppService(service);
-    });
+    envConfig
+      .getAppService()
+      .then((service) => {
+        setAppService(service);
+      })
+      // Every page gates its render on a non-null `appService`, so an
+      // unhandled rejection here is invisible: no error, no UI, just a blank
+      // window for the rest of the session. Surface it instead.
+      .catch((err) => {
+        console.error('Failed to initialize app service:', err);
+      });
     window.addEventListener('error', (e) => {
       if (e.message === 'ResizeObserver loop limit exceeded') {
         e.stopImmediatePropagation();

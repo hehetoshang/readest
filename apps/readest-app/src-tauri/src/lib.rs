@@ -23,6 +23,7 @@ use tauri_plugin_fs::FsExt;
 #[cfg(desktop)]
 use tauri::{Listener, Url};
 mod clip_url;
+mod cover_thumbnail;
 mod dir_scanner;
 #[cfg(any(
     target_os = "macos",
@@ -31,6 +32,7 @@ mod dir_scanner;
 ))]
 mod discord_rpc;
 mod epub_parser;
+mod localsend;
 #[cfg(target_os = "macos")]
 mod macos;
 mod mobi_parser;
@@ -721,6 +723,7 @@ pub fn run() {
             #[cfg(desktop)]
             is_updater_disabled,
             allow_paths_in_scopes,
+            cover_thumbnail::optimize_cover_thumbnails,
             dir_scanner::read_dir,
             epub_parser::parse_epub_metadata,
             epub_parser::extract_epub_cover_full,
@@ -748,6 +751,15 @@ pub fn run() {
             ))]
             discord_rpc::clear_book_presence,
             clip_url::clip_url,
+            localsend::commands::localsend_start,
+            localsend::commands::localsend_stop,
+            localsend::commands::localsend_get_status,
+            localsend::commands::localsend_list_devices,
+            localsend::commands::localsend_announce,
+            localsend::commands::localsend_respond,
+            localsend::commands::localsend_cancel_receive,
+            localsend::commands::localsend_send_files,
+            localsend::commands::localsend_cancel_send,
             #[cfg(desktop)]
             spawn_fresh_browser::spawn_fresh_browser,
             // Moke embedded reader: nightly updater (tauri-plugin-updater) is disabled.
@@ -863,6 +875,7 @@ pub fn run() {
                 let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));
                 app.manage(discord_client);
             }
+            app.manage(localsend::LocalSendState::default());
 
             #[cfg(desktop)]
             {

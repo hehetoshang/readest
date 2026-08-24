@@ -107,13 +107,9 @@ const selectFileTauri = async (
     });
   }
   // Android's SAF picker filters by MIME type. Niche/custom extensions
-  // (e.g. ".mrexpt" from Moon+ Reader) and font files on some providers
-  // have no registered MIME and would
-  // appear greyed-out, so for those cases we ask the native side for an
-  // unfiltered picker and re-apply the extension whitelist on the
-  // resulting paths below. We extend the same treatment to 'generic'
-  // selections because callers there typically pass arbitrary extensions
-  // that SAF likewise cannot match (e.g. mrexpt, txt).
+  // (e.g. ".mrexpt" from Moon+ Reader, font files, and audiobook ".m4b")
+  // have no registered MIME on some providers and would appear greyed-out, so
+  // use an unfiltered picker and re-apply the extension whitelist below.
   //
   // Image selections are the exception on iOS: image extensions all map to
   // real UTTypes, so passing them lets the dialog plugin open the Photos
@@ -128,6 +124,7 @@ const selectFileTauri = async (
       (options.type === 'books' ||
         options.type === 'dictionaries' ||
         options.type === 'fonts' ||
+        options.type === 'audio' ||
         options.type === 'generic'));
   const exts = noFilter ? [] : options.extensions || [];
   const title = options.dialogTitle || _('Select Files');
@@ -201,8 +198,8 @@ export const FILE_SELECTION_PRESETS = {
     dialogTitle: _('Select Video'),
   },
   audio: {
-    accept: 'audio/*',
-    extensions: ['mp3', 'wav', 'ogg', 'flac', 'm4a'],
+    accept: 'audio/*,.m4b',
+    extensions: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'm4b'],
     dialogTitle: _('Select Audio'),
   },
   books: {
@@ -216,8 +213,22 @@ export const FILE_SELECTION_PRESETS = {
     dialogTitle: _('Select Fonts'),
   },
   dictionaries: {
-    accept: '.mdx, .mdd, .ifo, .idx, .dict, .dz, .syn, .index, .slob, .bgl, .css',
-    extensions: ['mdx', 'mdd', 'ifo', 'idx', 'dict', 'dz', 'syn', 'index', 'slob', 'bgl', 'css'],
+    accept: '.mdx, .mdd, .ifo, .idx, .dict, .dz, .syn, .index, .slob, .bgl, .css, .zip, .rdict',
+    extensions: [
+      'mdx',
+      'mdd',
+      'ifo',
+      'idx',
+      'dict',
+      'dz',
+      'syn',
+      'index',
+      'slob',
+      'bgl',
+      'css',
+      'zip',
+      'rdict',
+    ],
     dialogTitle: _('Select Dictionary Files'),
   },
   covers: {
