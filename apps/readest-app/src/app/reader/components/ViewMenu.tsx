@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import React, { useEffect } from 'react';
 import { useState } from 'react';
 import { BiMoon, BiSun } from 'react-icons/bi';
+import { PiGear } from 'react-icons/pi';
 import { TbSunMoon } from 'react-icons/tb';
 import { MdZoomOut, MdZoomIn, MdCheck, MdOutlineSensors } from 'react-icons/md';
 import { MdRemove, MdAdd, MdContrast } from 'react-icons/md';
@@ -57,8 +58,8 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
   const { getBookData } = useBookDataStore();
   // const { getConfig } = useBookDataStore();
   const { setSettingsDialogOpen, setSettingsDialogBookKey } = useSettingsStore();
-  const { getView, getViewSettings, getProgress, setViewSettings, getViewState } = useReaderStore();
-  // const config = getConfig(bookKey)!;
+  const { getView, getViewSettings, getViewState, getProgress, setViewSettings, recreateViewer } =
+    useReaderStore();
   const bookData = getBookData(bookKey)!;
   const viewSettings = getViewSettings(bookKey)!;
   const viewState = getViewState(bookKey);
@@ -81,6 +82,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
     viewSettings!.invertImgColorInDark,
   );
   const [applyThemeToPDF, setApplyThemeToPDF] = useState(viewSettings!.applyThemeToPDF!);
+  const [rtlSpread, setRtlSpread] = useState(bookData?.bookDoc?.dir === 'rtl');
 
   const zoomIn = () => setZoomLevel((prev) => Math.min(prev + ZOOM_STEP, MAX_ZOOM_LEVEL));
   const zoomOut = () => setZoomLevel((prev) => Math.max(prev - ZOOM_STEP, MIN_ZOOM_LEVEL));
@@ -98,7 +100,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
     setIsDropdownOpen?.(false);
   };
 
-  const openFontLayoutMenu = () => {
+  const openSettingsDialog = () => {
     setIsDropdownOpen?.(false);
     setSettingsDialogBookKey(bookKey);
     setSettingsDialogOpen(true);
@@ -243,12 +245,21 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keepCoverSpread]);
 
-  // const lastSyncTime = Math.max(
-  //   config?.lastSyncedAtConfig || 0,
-  //   config?.lastSyncedAtNotes || 0,
-  //   config?.lastPushedAtConfig || 0,
-  //   config?.lastPushedAtNotes || 0,
-  // );
+  useEffect(() => {
+    const bookDoc = bookData?.bookDoc;
+    if (!bookDoc || rtlSpread === (bookDoc.dir === 'rtl')) return;
+    // Writing mode is per-book only (no global fallback), and horizontal-rl is
+    // what flips both the spread order and the page progression, so the toggle
+    // rides the same setting the Layout panel edits instead of a new one.
+    const writingMode = rtlSpread ? 'horizontal-rl' : 'horizontal-tb';
+    viewSettings.vertical = false;
+    saveViewSettings(envConfig, bookKey, 'writingMode', writingMode, true).then(() => {
+      const view = getView(bookKey);
+      if (view) view.book.dir = rtlSpread ? 'rtl' : 'ltr';
+      recreateViewer(envConfig, bookKey);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rtlSpread]);
 
   return (
     <Menu
@@ -258,7 +269,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
       )}
       onCancel={() => setIsDropdownOpen?.(false)}
     >
-      <MenuItem label={_('Settings')} onClick={openFontLayoutMenu} />
+      <MenuItem label={_('Settings')} onClick={openSettingsDialog} />
 
       {bookData.bookDoc?.rendition?.layout === 'pre-paginated' && (
         <>
@@ -420,13 +431,16 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
               onClick={() => setKeepCoverSpread(!keepCoverSpread)}
               disabled={spreadMode === 'none'}
             />
+            <MenuItem
+              label={_('Right-to-Left Pages')}
+              Icon={rtlSpread ? MdCheck : undefined}
+              onClick={() => setRtlSpread(!rtlSpread)}
+            />
             <MenuItem label={_('Webtoon Mode')} toggled={webtoonMode} onClick={toggleWebtoonMode} />
           </>
           <hr aria-hidden='true' className='border-base-300 my-1' />
         </>
       )}
-
-      <MenuItem label={_('Font & Layout')} shortcut='Shift+F' onClick={openFontLayoutMenu} />
 
       {!bookData.isFixedLayout && (
         <MenuItem
@@ -471,7 +485,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
             ? _('Sign in to Sync')
             : lastSyncTime
               ? _('Synced {{time}}', {
-                  time: dayjs(lastSyncTime).fromNow(),
+                  time: dayjs(clampSyncTimeForDisplay(lastSyncTime)).fromNow(),
                 })
               : _('Never synced')
         }
@@ -518,6 +532,7 @@ const ViewMenu: React.FC<ViewMenuProps> = ({
         }
         onClick={cycleThemeMode}
       />
+      <MenuItem label={_('Settings')} Icon={PiGear} onClick={openSettingsDialog} />
       {bookData.book?.format === 'PDF' && appService?.supportsCanvasContext2DFilter && (
         <MenuItem
           label={_('Apply Theme Colors to PDF')}

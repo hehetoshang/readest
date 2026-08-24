@@ -35,6 +35,7 @@ import { bookOrbitProgressProvider } from '../hooks/bookOrbitProgressProvider';
 import { useKOSync } from '../hooks/useKOSync';
 import { useFileSync } from '../hooks/useFileSync';
 import {
+  applyEinkModeAttribute,
   applyFixedlayoutStyles,
   applyImageStyle,
   applyScrollbarStyle,
@@ -80,7 +81,7 @@ import { manageSyntaxHighlighting } from '@/utils/highlightjs';
 import { getViewInsets } from '@/utils/insets';
 import { collectDocumentImages, DocumentImage } from '../utils/documentImages';
 import { footerReservesBand } from '../utils/footerBand';
-import { showTransientSearchHighlight } from '../utils/searchHighlight';
+import { showTransientHighlight } from '../utils/transientHighlight';
 import { handleA11yNavigation } from '@/utils/a11y';
 import { isCJKLang } from '@/utils/lang';
 import { getLocale } from '@/utils/misc';
@@ -288,6 +289,7 @@ const FoliateViewer: React.FC<{
           if (policy.kind === 'passthrough') return data;
 
           const viewSettings = getViewSettings(bookKey);
+          const bookData = getBookData(bookKey);
           const text =
             typeof data === 'string' ? data : data instanceof Blob ? await data.text() : null;
           if (text === null) return '';
@@ -295,11 +297,16 @@ const FoliateViewer: React.FC<{
           detail.type = policy.contentType;
           if (policy.kind === 'stylesheet') {
             return viewSettings
-              ? transformStylesheet(text, width, height, viewSettings.vertical)
+              ? transformStylesheet(
+                  text,
+                  width,
+                  height,
+                  viewSettings.vertical,
+                  bookData?.isFixedLayout,
+                )
               : text;
           }
 
-          const bookData = getBookData(bookKey);
           if (!viewSettings || !bookData) return '';
           const isSvg = policy.contentType === 'image/svg+xml';
           const ctx: TransformContext = {
@@ -368,6 +375,10 @@ const FoliateViewer: React.FC<{
         writingDir?.vertical || viewSettings.writingMode.includes('vertical') || false;
       const newRtl =
         writingDir?.rtl ||
+        // Fixed-layout books carry no writing mode; their direction may come
+        // from the document itself (PDF ViewerPreferences /Direction /R2L),
+        // and page-turn taps and swipes must follow it.
+        bookDoc.dir === 'rtl' ||
         getDirFromUILanguage() === 'rtl' ||
         viewSettings.writingMode.includes('rl') ||
         false;
@@ -386,7 +397,7 @@ const FoliateViewer: React.FC<{
       });
 
       if (bookDoc.rendition?.layout === 'pre-paginated') {
-        applyFixedlayoutStyles(detail.doc, viewSettings);
+        applyFixedlayoutStyles(detail.doc, viewSettings, undefined, bookData.book?.format);
         const themeCode = getThemeCode();
         if (bookData.book?.format === 'PDF' && themeCode && renderer) {
           renderer.pageColors = viewSettings.applyThemeToPDF
@@ -403,6 +414,7 @@ const FoliateViewer: React.FC<{
       applyTableTouchScroll(detail.doc);
       applyThemeModeClass(detail.doc, isDarkMode);
       applyScrollModeClass(detail.doc, viewSettings.scrolled || false);
+      applyEinkModeAttribute(detail.doc, viewSettings.isEink || false);
       applyScrollbarStyle(document, viewSettings.hideScrollbar || false);
       keepTextAlignment(detail.doc);
       handleA11yNavigation(viewRef.current, detail.doc, {
@@ -796,18 +808,18 @@ const FoliateViewer: React.FC<{
       } else {
         await view.goToFraction(0);
       }
-      setViewInited(bookKey, true);
-
       // The reader is showing a deep-link target, not the user's actual reading
       // position. Mark the view as a preview so progress writers (auto-save,
       // cloud sync, kosync) skip until the user takes a reading action. The
       // flag clears on the first user-initiated relocate (page / scroll) in
-      // docRelocateHandler below.
+      // docRelocateHandler below. Set before `inited` so everything that starts
+      // reading on init (e.g. Auto Scroll resume) already sees the preview.
       if (overrideLocation) {
         setPreviewMode(bookKey, true);
       }
+      setViewInited(bookKey, true);
       if (overrideLocation && searchParams?.get('highlight') === 'search') {
-        librarySearchHighlightTimerRef.current = await showTransientSearchHighlight(
+        librarySearchHighlightTimerRef.current = await showTransientHighlight(
           view,
           overrideLocation,
         );
@@ -930,10 +942,11 @@ const FoliateViewer: React.FC<{
       const docs = viewRef.current.renderer.getContents();
       docs.forEach(({ doc }) => {
         if (bookDoc.rendition?.layout === 'pre-paginated') {
-          applyFixedlayoutStyles(doc, viewSettings);
+          applyFixedlayoutStyles(doc, viewSettings, undefined, bookData?.book?.format);
         }
         applyThemeModeClass(doc, isDarkMode);
         applyScrollModeClass(doc, viewSettings.scrolled || false);
+        applyEinkModeAttribute(doc, viewSettings.isEink || false);
         applyScrollbarStyle(document, viewSettings.hideScrollbar || false);
       });
 
@@ -956,6 +969,7 @@ const FoliateViewer: React.FC<{
     viewSettings?.applyThemeToPDF,
     viewSettings?.contrast,
     viewSettings?.hideScrollbar,
+    viewSettings?.isEink,
   ]);
 
   useEffect(() => {

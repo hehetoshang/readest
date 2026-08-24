@@ -1,10 +1,8 @@
 import clsx from 'clsx';
 import dayjs from 'dayjs';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import { MdEdit, MdDelete, MdContentCopy } from 'react-icons/md';
 
-import { Marked } from 'marked';
-import markedKatex from 'marked-katex-extension';
 import { useEnv } from '@/context/EnvContext';
 import { BookNote, HighlightColor } from '@/types/book';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -17,16 +15,14 @@ import { eventDispatcher } from '@/utils/event';
 import { isCfiInLocation } from '@/utils/cfi';
 import { buildAnnotationUrl } from '@/utils/deeplink';
 import { buildAnnotationCopyMarkdown } from '@/utils/note';
-import { sanitizeRenderedBookNoteHtml } from '@/utils/booknote';
 import { writeTextToClipboard } from '@/utils/clipboard';
 import { DEFAULT_NOTE_EXPORT_CONFIG } from '@/services/constants';
-import {
-  applyNoteBubbleTransition,
-  decideNoteBubbleTransition,
-  removeBookNoteOverlays,
-} from '../../utils/annotatorUtil';
+import { removeBookNoteOverlays } from '../../utils/annotatorUtil';
+import { parseNoteMarkdown } from '../../utils/noteMarkdown';
+import { useSaveBooknoteNoteText } from '../../hooks/useSaveBooknoteNoteText';
+import { useInlineTextEditor } from '../../hooks/useInlineTextEditor';
 import TextButton from '@/components/TextButton';
-import TextEditor, { TextEditorRef } from '@/components/TextEditor';
+import TextEditor from '@/components/TextEditor';
 
 interface BooknoteItemProps {
   bookKey: string;
@@ -35,22 +31,6 @@ interface BooknoteItemProps {
   onClick?: () => void;
   inlineNoteEditing?: boolean;
 }
-
-// A scoped parser: `.use()` mutates in place, and the export dialog still
-// parses with the shared `marked` singleton. Mirrored in
-// __tests__/utils/md-note.test.ts — keep the options there in sync.
-const markdownParser = new Marked({ gfm: true }).use(
-  markedKatex({
-    // Bad math renders red inline with the error on hover instead of throwing.
-    throwOnError: false,
-    // The default emits MathML + HTML and needs katex.min.css to hide one; no
-    // KaTeX stylesheet is loaded here, so equations would render twice.
-    output: 'mathml',
-    // The default needs a space before the opening `$`, so `word\n$x$` renders
-    // as plain text with no error. Cost: `$5 and $10` is math (`\$` escapes).
-    nonStandard: true,
-  }),
-);
 
 const BooknoteItem: React.FC<BooknoteItemProps> = ({
   bookKey,
@@ -71,9 +51,25 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
 
   const { text, cfi, note } = item;
   const isReadOnly = item.source?.readOnly === true;
-  const editorRef = useRef<TextEditorRef>(null);
-  const [editorDraft, setEditorDraft] = useState(text || '');
-  const [inlineEditMode, setInlineEditMode] = useState(false);
+  const isBookmark = item.type === 'bookmark';
+  const saveBooknoteNoteText = useSaveBooknoteNoteText(bookKey);
+  const saveBookmarkText = (draftText: string) => {
+    const config = getConfig(bookKey);
+    if (!config || !draftText) return;
+    const { booknotes: annotations = [] } = config;
+    const existingIndex = annotations.findIndex((annotation) => item.id === annotation.id);
+    if (existingIndex === -1) return;
+    annotations[existingIndex]!.updatedAt = Date.now();
+    annotations[existingIndex]!.text = draftText;
+    const updatedConfig = updateBooknotes(bookKey, annotations);
+    if (updatedConfig) {
+      saveConfig(envConfig, bookKey, updatedConfig, settings);
+    }
+  };
+  const { editorRef, draftText, setDraftText, inlineEditMode, startEdit, cancelEdit, save } =
+    useInlineTextEditor(
+      isBookmark ? saveBookmarkText : (noteText) => saveBooknoteNoteText(item.id, noteText),
+    );
   const separatorWidth = useResponsiveSize(3);
   const size18 = useResponsiveSize(18);
 
@@ -87,12 +83,10 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
     [cfi, progress?.location, isNearest],
   );
 
-  // Parsing and sanitizing is heavy when called on every list scroll re-render
-  // across hundreds of items. Cache by note text — note edits bust the cache.
-  const noteHtml = useMemo(
-    () => (note ? sanitizeRenderedBookNoteHtml(markdownParser.parse(note) as string) : ''),
-    [note],
-  );
+  // parseNoteMarkdown is heavy when called on every list scroll re-render
+  // across hundreds of items. Cache by note text — note edits change
+  // item.note and bust the cache automatically.
+  const noteHtml = useMemo(() => (note ? parseNoteMarkdown(note) : ''), [note]);
 
   // dayjs().fromNow() reformats every render; cache per createdAt.
   const createdAtLabel = useMemo(() => dayjs(item.createdAt).fromNow(), [item.createdAt]);
@@ -165,56 +159,11 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
     });
   };
 
-  const editBookmark = () => {
-    setEditorDraft(text || '');
-    setInlineEditMode(true);
-  };
+  const editBookmark = () => startEdit(text || '');
 
-  const editNoteInline = () => {
-    setEditorDraft(item.note || '');
-    setInlineEditMode(true);
-  };
-
-  const handleSaveInlineNote = () => {
-    setInlineEditMode(false);
-    const config = getConfig(bookKey);
-    if (!config) return;
-    const { booknotes = [] } = config;
-    const existingIndex = booknotes.findIndex(
-      (annotation) => annotation.id === item.id && !annotation.deletedAt,
-    );
-    if (existingIndex === -1) return;
-    const existing = booknotes[existingIndex]!;
-    const nextNote = editorDraft.trim() ? editorDraft : '';
-    const transition = decideNoteBubbleTransition(existing.note, nextNote);
-    const updated: BookNote = { ...existing, note: nextNote, updatedAt: Date.now() };
-    booknotes[existingIndex] = updated;
-    applyNoteBubbleTransition(getViewsById(bookKey.split('-')[0]!), updated, transition);
-    const updatedConfig = updateBooknotes(bookKey, booknotes);
-    if (updatedConfig) {
-      saveConfig(envConfig, bookKey, updatedConfig, settings);
-    }
-  };
-
-  const handleSaveBookmark = () => {
-    setInlineEditMode(false);
-    const config = getConfig(bookKey);
-    if (!config || !editorDraft) return;
-
-    const { booknotes: annotations = [] } = config;
-    const existingIndex = annotations.findIndex((annotation) => item.id === annotation.id);
-    if (existingIndex === -1) return;
-    annotations[existingIndex]!.updatedAt = Date.now();
-    annotations[existingIndex]!.text = editorDraft;
-    const updatedConfig = updateBooknotes(bookKey, annotations);
-    if (updatedConfig) {
-      saveConfig(envConfig, bookKey, updatedConfig, settings);
-    }
-  };
+  const editNoteInline = () => startEdit(item.note || '');
 
   if (inlineEditMode) {
-    const isBookmark = item.type === 'bookmark';
-    const handleSave = isBookmark ? handleSaveBookmark : handleSaveInlineNote;
     return (
       <div
         className={clsx(
@@ -227,17 +176,17 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
           <TextEditor
             className='!leading-normal'
             ref={editorRef}
-            value={editorDraft}
-            onChange={setEditorDraft}
-            onSave={handleSave}
-            onEscape={() => setInlineEditMode(false)}
+            value={draftText}
+            onChange={setDraftText}
+            onSave={save}
+            onEscape={cancelEdit}
             spellCheck={false}
             autoFocus
           />
         </div>
         <div className='flex justify-end space-x-3 p-2' dir='ltr'>
-          <TextButton onClick={() => setInlineEditMode(false)}>{_('Cancel')}</TextButton>
-          <TextButton onClick={handleSave} disabled={isBookmark && !editorDraft}>
+          <TextButton onClick={cancelEdit}>{_('Cancel')}</TextButton>
+          <TextButton onClick={save} disabled={isBookmark && !draftText}>
             {_('Save')}
           </TextButton>
         </div>
@@ -247,9 +196,7 @@ const BooknoteItem: React.FC<BooknoteItemProps> = ({
 
   const isEditable =
     !isReadOnly &&
-    (!!item.note ||
-      item.type === 'bookmark' ||
-      (!!inlineNoteEditing && item.type === 'annotation'));
+    (!!item.note || isBookmark || (!!inlineNoteEditing && item.type === 'annotation'));
 
   return (
     <li
