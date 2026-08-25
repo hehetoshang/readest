@@ -103,7 +103,7 @@ const finalizeTelemetryDecision = ({
 };
 
 const Providers = ({ children }: { children: React.ReactNode }) => {
-  const { envConfig, appService } = useEnv();
+  const { envConfig, appService, appServiceError, retryAppService } = useEnv();
   const { applyUILanguage } = useSettingsStore();
   const { applyBackgroundTexture } = useBackgroundTexture();
   const { applyEinkMode } = useEinkMode();
@@ -223,8 +223,66 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
     if (updated) meta.content = updated;
   }, []);
 
-  // Make sure appService is available in all children components
-  if (!appService) return;
+  // Keep diagnostics available while the native service starts. Previously
+  // this guard also hid the embedded debug launcher, turning every startup
+  // error into an unobservable permanent white screen.
+  if (!appService) {
+    return (
+      <>
+        <DebugLogIntegration />
+        {appServiceError && (
+          <main
+            role='alert'
+            style={{
+              minHeight: '100vh',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+              background: '#fff',
+              color: '#111',
+              fontFamily: 'system-ui, sans-serif',
+            }}
+          >
+            <div style={{ width: 'min(100%, 520px)' }}>
+              <h1 style={{ margin: '0 0 12px', fontSize: 22 }}>Reader failed to start</h1>
+              <p style={{ margin: '0 0 16px', lineHeight: 1.5 }}>
+                The native reader service could not be initialized.
+              </p>
+              <pre
+                style={{
+                  margin: '0 0 16px',
+                  padding: 12,
+                  overflowWrap: 'anywhere',
+                  whiteSpace: 'pre-wrap',
+                  borderRadius: 8,
+                  background: '#f1f1f1',
+                  fontSize: 12,
+                }}
+              >
+                {appServiceError}
+              </pre>
+              <button
+                type='button'
+                onClick={retryAppService}
+                style={{
+                  minHeight: 44,
+                  padding: '0 20px',
+                  border: 0,
+                  borderRadius: 8,
+                  background: '#2563eb',
+                  color: '#fff',
+                  fontWeight: 600,
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          </main>
+        )}
+      </>
+    );
+  }
 
   // App-lock gate. While the lock store is uninitialized we render
   // nothing — without this guard the library would flash on screen
