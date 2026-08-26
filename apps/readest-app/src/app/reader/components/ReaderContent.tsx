@@ -275,7 +275,12 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
       });
     };
 
-    openTransientFiles();
+    void openTransientFiles().catch((error) => {
+      // Failures before the per-file import loop (for example loading the
+      // library database) used to leave the loading indicator visible forever.
+      console.error('Failed to initialize transient reader files:', error);
+      failToOpen();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appService]);
 

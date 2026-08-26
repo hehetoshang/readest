@@ -84,19 +84,26 @@ pub fn handle<R: Runtime>(
     request: Request<Vec<u8>>,
     responder: UriSchemeResponder,
 ) {
-    // Only Android calls this off the UI thread (`shouldInterceptRequest` runs
-    // on a WebView worker). On iOS/macOS WKWebView invokes the scheme handler
-    // on the MAIN thread, so responding inline blocked the UI for the whole
-    // scope check + file read: `is_allowed` canonicalizes (realpath/getattrlist
-    // on every component) and the range read follows, which on a large book or
-    // a not-yet-materialized iCloud file is easily past the 2s hang threshold.
-    // The scheme is registered asynchronously precisely so the responder can
-    // outlive this call, so hand the blocking work to the runtime's blocking
-    // pool and return immediately.
-    let app = ctx.app_handle().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        responder.respond(build_response(&app, &request));
-    });
+    // Android invokes custom protocols from WebView's shouldInterceptRequest
+    // worker and waits for the response on that worker. Handing the responder
+    // to Tauri's blocking pool can leave that intercepted request pending in
+    // embedded hosts (notably Moke), so every RemoteFile read waits forever and
+    // the reader never gets past its loading indicator. File I/O is already off
+    // the Android UI thread; respond on the current worker as the original
+    // rangefile implementation did.
+    #[cfg(target_os = "android")]
+    responder.respond(build_response(ctx.app_handle(), &request));
+
+    // WKWebView invokes the scheme handler on the main thread. Keep Apple and
+    // desktop platforms on the blocking pool so scope canonicalization and a
+    // large/not-yet-materialized file cannot stall the UI.
+    #[cfg(not(target_os = "android"))]
+    {
+        let app = ctx.app_handle().clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            responder.respond(build_response(&app, &request));
+        });
+    }
 }
 
 fn cors_origin(request: &Request<Vec<u8>>) -> String {
