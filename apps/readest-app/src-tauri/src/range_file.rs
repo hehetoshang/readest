@@ -37,6 +37,32 @@ struct RangeQuery {
     end: Option<u64>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ResponseDispatch {
+    CurrentWorker,
+    BlockingPool,
+}
+
+const fn response_dispatch(is_android: bool) -> ResponseDispatch {
+    if is_android {
+        ResponseDispatch::CurrentWorker
+    } else {
+        ResponseDispatch::BlockingPool
+    }
+}
+
+fn bounded_range(total: u64, start: u64, end: Option<u64>) -> (u64, u64) {
+    let start = start.min(total);
+    let last = total.saturating_sub(1);
+    let end = end.unwrap_or(last).min(last);
+    let len = if total == 0 || start > end {
+        0
+    } else {
+        (end + 1 - start).min(MAX_RANGE_LEN)
+    };
+    (start, len)
+}
+
 fn parse_query(uri_query: Option<&str>) -> Option<RangeQuery> {
     let query = uri_query?;
     let mut path: Option<PathBuf> = None;
@@ -91,18 +117,19 @@ pub fn handle<R: Runtime>(
     // the reader never gets past its loading indicator. File I/O is already off
     // the Android UI thread; respond on the current worker as the original
     // rangefile implementation did.
-    #[cfg(target_os = "android")]
-    responder.respond(build_response(ctx.app_handle(), &request));
-
-    // WKWebView invokes the scheme handler on the main thread. Keep Apple and
-    // desktop platforms on the blocking pool so scope canonicalization and a
-    // large/not-yet-materialized file cannot stall the UI.
-    #[cfg(not(target_os = "android"))]
-    {
-        let app = ctx.app_handle().clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            responder.respond(build_response(&app, &request));
-        });
+    match response_dispatch(cfg!(target_os = "android")) {
+        ResponseDispatch::CurrentWorker => {
+            responder.respond(build_response(ctx.app_handle(), &request));
+        }
+        // WKWebView invokes the scheme handler on the main thread. Keep Apple
+        // and desktop platforms on the blocking pool so scope canonicalization
+        // and a large/not-yet-materialized file cannot stall the UI.
+        ResponseDispatch::BlockingPool => {
+            let app = ctx.app_handle().clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(build_response(&app, &request));
+            });
+        }
     }
 }
 
@@ -165,14 +192,7 @@ fn build_response<R: Runtime>(app: &AppHandle<R>, request: &Request<Vec<u8>>) ->
         Err(_) => return error(&origin, StatusCode::INTERNAL_SERVER_ERROR),
     };
 
-    let start = query.start.min(total);
-    let last = total.saturating_sub(1);
-    let end_inclusive = query.end.unwrap_or(last).min(last);
-    let nbytes = if total == 0 || start > end_inclusive {
-        0
-    } else {
-        (end_inclusive + 1 - start).min(MAX_RANGE_LEN)
-    };
+    let (start, nbytes) = bounded_range(total, query.start, query.end);
 
     let mut buf = vec![0u8; nbytes as usize];
     if nbytes > 0 {
@@ -270,5 +290,41 @@ mod tests {
         assert!(!is_safe_path(Path::new("data/x/a.epub"))); // not absolute
         assert!(!is_safe_path(Path::new("a.epub")));
         assert!(!is_safe_path(Path::new("/data/a\0b.epub"))); // NUL byte
+    }
+
+    #[test]
+    fn android_dispatches_on_the_current_webview_worker() {
+        assert_eq!(
+            response_dispatch(true),
+            ResponseDispatch::CurrentWorker,
+            "Android must not hand an intercepted request to another pool"
+        );
+    }
+
+    #[test]
+    fn non_android_dispatches_on_the_blocking_pool() {
+        assert_eq!(response_dispatch(false), ResponseDispatch::BlockingPool);
+    }
+
+    #[test]
+    fn bounded_range_clamps_to_file_and_requested_end() {
+        assert_eq!(bounded_range(100, 10, Some(19)), (10, 10));
+        assert_eq!(bounded_range(100, 90, Some(200)), (90, 10));
+        assert_eq!(bounded_range(100, 50, None), (50, 50));
+    }
+
+    #[test]
+    fn bounded_range_handles_empty_reversed_and_past_eof_requests() {
+        assert_eq!(bounded_range(0, 0, None), (0, 0));
+        assert_eq!(bounded_range(100, 80, Some(20)), (80, 0));
+        assert_eq!(bounded_range(100, 150, None), (100, 0));
+    }
+
+    #[test]
+    fn bounded_range_caps_pathological_requests() {
+        assert_eq!(
+            bounded_range(MAX_RANGE_LEN * 2, 0, None),
+            (0, MAX_RANGE_LEN)
+        );
     }
 }

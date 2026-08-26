@@ -297,6 +297,7 @@ export class RemoteFile extends File implements ClosableFile {
   static MAX_CACHE_CHUNK_SIZE = 1024 * 128;
   static MAX_CACHE_ITEMS_SIZE: number = 128;
   static RANGE_SCHEME_ORIGIN = 'http://rangefile.localhost';
+  static RANGE_FETCH_TIMEOUT_MS = 15_000;
 
   constructor(url: string, name?: string, type = '', lastModified = Date.now()) {
     const basename = url.split('/').pop() || 'remote-file';
@@ -366,13 +367,38 @@ export class RemoteFile extends File implements ClosableFile {
   async _open_with_query() {
     // No `Range` header — the rangefile handler returns the file size in
     // `X-Total-Size` and the requested bytes as a plain 200 body.
-    const response = await fetch(`${this.url}&start=0&end=0`);
+    const response = await this.#fetchQueryRange(`${this.url}&start=0&end=0`);
     if (!response.ok) {
       throw new Error(`Failed to fetch file size: ${response.status}`);
     }
-    this.#size = Number(response.headers.get('x-total-size'));
+    const sizeHeader = response.headers.get('x-total-size');
+    const size = Number(sizeHeader);
+    if (
+      sizeHeader === null ||
+      sizeHeader.trim() === '' ||
+      !Number.isSafeInteger(size) ||
+      size < 0
+    ) {
+      throw new Error('Invalid X-Total-Size from rangefile protocol');
+    }
+    this.#size = size;
     this.#type = response.headers.get('content-type') || '';
     return this;
+  }
+
+  async #fetchQueryRange(url: string): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), RemoteFile.RANGE_FETCH_TIMEOUT_MS);
+    try {
+      return await fetch(url, { signal: controller.signal });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error('Timed out waiting for rangefile protocol response', { cause: error });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async open() {
@@ -397,7 +423,7 @@ export class RemoteFile extends File implements ClosableFile {
     end = Math.min(this.size - 1, end);
     // console.log(`Fetching range: ${start}-${end}, size: ${end - start + 1}`);
     const response = this.#queryRange
-      ? await fetch(`${this.url}&start=${start}&end=${end}`)
+      ? await this.#fetchQueryRange(`${this.url}&start=${start}&end=${end}`)
       : await fetch(this.url, { headers: { Range: `bytes=${start}-${end}` } });
     if (!response.ok) {
       throw new Error(`Failed to fetch range: ${response.status}`);

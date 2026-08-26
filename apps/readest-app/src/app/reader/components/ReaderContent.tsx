@@ -48,6 +48,7 @@ import BooksGrid from './BooksGrid';
 import SettingsDialog from '@/components/settings/SettingsDialog';
 import AudiobookPairingDialog from './audiobook/AudiobookPairingDialog';
 import HardcoverLinkDialog from './hardcover/HardcoverLinkDialog';
+import { runTransientReaderBootstrap } from '../utils/transientReader';
 
 // Moke mobile has a single WebView, so it navigates that WebView to the
 // bundled reader with the downloaded book path in the query string. Desktop
@@ -275,12 +276,11 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
       });
     };
 
-    void openTransientFiles().catch((error) => {
-      // Failures before the per-file import loop (for example loading the
-      // library database) used to leave the loading indicator visible forever.
-      console.error('Failed to initialize transient reader files:', error);
-      failToOpen();
-    });
+    // Failures before the per-file import loop (for example loading the
+    // library database) must leave the loading state instead of spinning
+    // forever. Keep this wrapper independently tested because these failures
+    // happen before initViewState's own rejection handler exists.
+    void runTransientReaderBootstrap(openTransientFiles, failToOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appService]);
 

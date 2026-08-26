@@ -37,6 +37,7 @@ describe('RemoteFile.fromNativePath (rangefile query-range scheme)', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -80,6 +81,75 @@ describe('RemoteFile.fromNativePath (rangefile query-range scheme)', () => {
     const buf = await f.slice(2000, 2010).arrayBuffer(); // [2000, 2010)
     expect(buf.byteLength).toBe(10);
     expect(new Uint8Array(buf)[0]).toBe(2000 & 0xff);
+    expect(noRangeHeader()).toBe(true);
+  });
+
+  it('rejects a failed rangefile response instead of accepting an unreadable book', async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 403,
+      headers: new Headers(),
+    })) as unknown as typeof fetch;
+
+    await expect(RemoteFile.fromNativePath(path).open()).rejects.toThrow(
+      'Failed to fetch file size: 403',
+    );
+  });
+
+  it.each([
+    null,
+    '',
+    '-1',
+    'NaN',
+    '3.14',
+  ])('rejects an invalid X-Total-Size header (%s)', async (sizeHeader) => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers(sizeHeader === null ? {} : { 'X-Total-Size': sizeHeader }),
+    })) as unknown as typeof fetch;
+
+    await expect(RemoteFile.fromNativePath(path).open()).rejects.toThrow(
+      'Invalid X-Total-Size from rangefile protocol',
+    );
+  });
+
+  it('times out a rangefile request that never responds', async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        }),
+    ) as unknown as typeof fetch;
+
+    const opening = RemoteFile.fromNativePath(path).open();
+    const assertion = expect(opening).rejects.toThrow(
+      'Timed out waiting for rangefile protocol response',
+    );
+    await vi.advanceTimersByTimeAsync(RemoteFile.RANGE_FETCH_TIMEOUT_MS);
+    await assertion;
+  });
+
+  it('resolves concurrent non-zero ranges without mixing their bytes', async () => {
+    const f = await RemoteFile.fromNativePath(path).open();
+    calls.length = 0;
+    const ranges = [
+      [128, 255],
+      [1024, 1151],
+      [4096, 4223],
+      [7000, 7127],
+    ] as const;
+
+    const buffers = await Promise.all(ranges.map(([start, end]) => f.fetchRangePart(start, end)));
+
+    expect(buffers).toHaveLength(ranges.length);
+    buffers.forEach((buffer, index) => {
+      expect(buffer.byteLength).toBe(128);
+      expect(new Uint8Array(buffer)[0]).toBe(ranges[index]![0] & 0xff);
+    });
     expect(noRangeHeader()).toBe(true);
   });
 });
