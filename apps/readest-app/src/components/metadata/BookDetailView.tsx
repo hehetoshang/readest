@@ -29,6 +29,7 @@ import {
 } from '@/utils/book';
 import { isFeedBook } from '@/services/rss/feedBookUrl';
 import { saveSysSettings } from '@/helpers/settings';
+import { sanitizeDescriptionHtml } from '@/utils/sanitize';
 import BookCover from '@/components/BookCover';
 import BookCoverViewer, { useBookCoverViewer } from '@/components/BookCoverViewer';
 import Dropdown from '../Dropdown';
@@ -72,6 +73,9 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
   const { coverSrc, openCoverViewer, closeCoverViewer } = useBookCoverViewer(book);
   const subjects = getContributorNames(metadata?.subject);
   const visibleSubjects = subjectsExpanded ? subjects : subjects.slice(0, 3);
+  const descriptionHtml = sanitizeDescriptionHtml(
+    metadata?.description || _('No description available'),
+  );
 
   const renderMetadataChip = (type: 'tag' | 'subject', value: string) => {
     const className = 'badge badge-outline h-auto min-h-6 whitespace-normal px-2 py-1 text-xs';
@@ -450,7 +454,7 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
               <p
                 className='text-neutral-content prose prose-sm max-w-full whitespace-pre-line text-sm'
                 dangerouslySetInnerHTML={{
-                  __html: metadata?.description || _('No description available'),
+                  __html: descriptionHtml,
                 }}
               ></p>
             </div>

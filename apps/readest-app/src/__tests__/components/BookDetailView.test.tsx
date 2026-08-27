@@ -7,6 +7,15 @@ import { DropdownProvider } from '@/context/DropdownContext';
 
 const mocks = vi.hoisted(() => ({
   toDataUrl: vi.fn(async (url: string) => `data:image/png;base64,${url}`),
+  settings: {
+    metadataSeriesCollapsed: true,
+    // The "File Path" entry lives under the Metadata section; tests below
+    // depend on it being expanded by default so the row is in the DOM.
+    metadataOthersCollapsed: false,
+    metadataDescriptionCollapsed: false,
+    libraryHideCovers: false,
+    librarySkeuomorphicCovers: false,
+  },
 }));
 
 vi.mock('@/hooks/useTranslation', () => ({
@@ -15,14 +24,7 @@ vi.mock('@/hooks/useTranslation', () => ({
 
 vi.mock('@/store/settingsStore', () => {
   const state = {
-    settings: {
-      metadataSeriesCollapsed: true,
-      // The "File Path" entry lives under the Metadata section; tests below
-      // depend on it being expanded by default so the row is in the DOM.
-      metadataOthersCollapsed: false,
-      metadataDescriptionCollapsed: true,
-      libraryHideCovers: false,
-    },
+    settings: mocks.settings,
   };
   const useSettingsStore = (selector?: (s: typeof state) => unknown) =>
     selector ? selector(state) : state;
@@ -259,6 +261,46 @@ describe('BookDetailView tags and subjects', () => {
     expect(onMetadataValueClick).toHaveBeenCalledWith('subject', 'History');
     fireEvent.click(getByText('Favorite'));
     expect(onMetadataValueClick).toHaveBeenCalledWith('tag', 'Favorite');
+  });
+});
+
+describe('BookDetailView description', () => {
+  it('renders only inert text formatting from untrusted EPUB metadata', () => {
+    const { container, getByText } = renderView({
+      metadata: {
+        title: 'Test Book',
+        author: 'Test Author',
+        language: 'en',
+        description:
+          '<p onclick="alert(1)">A <strong>good</strong> book.</p>' +
+          '<style>body{display:none}</style>' +
+          '<iframe src="https://tracker.example/frame"></iframe>' +
+          '<img src="https://tracker.example/pixel.gif">' +
+          '<a href="javascript:alert(1)">Read more</a>',
+      },
+    });
+
+    const description = container.querySelector('.metadata-description p');
+    expect(description).toBeTruthy();
+    expect(description!.querySelector('strong')?.textContent).toBe('good');
+    expect(getByText('Read more')).toBeTruthy();
+    expect(description!.querySelector('style, iframe, img, a')).toBeNull();
+    expect(description!.innerHTML).not.toMatch(/onclick|javascript:|tracker\.example/i);
+  });
+
+  it('uses the localized fallback for an empty description', () => {
+    const { container } = renderView({
+      metadata: {
+        title: 'Test Book',
+        author: 'Test Author',
+        language: 'en',
+        description: '',
+      },
+    });
+
+    expect(container.querySelector('.metadata-description p')?.textContent).toBe(
+      'No description available',
+    );
   });
 });
 
