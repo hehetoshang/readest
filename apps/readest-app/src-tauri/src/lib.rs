@@ -374,25 +374,21 @@ pub fn register_reader_protocols(
     builder.register_asynchronous_uri_scheme_protocol(range_file::SCHEME, range_file::handle)
 }
 
-/// Manage reader-related app state (currently the Discord Rich Presence
-/// client). Call once from the host app's `setup`.
-#[cfg(any(
-    target_os = "macos",
-    target_os = "windows",
-    all(target_os = "linux", not(target_env = "ohos"))
-))]
+/// Manage reader-related app state. Call once from the host app's `setup`.
 pub fn manage_reader_state(app: &AppHandle) {
-    use std::sync::{Arc, Mutex};
-    let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));
-    app.manage(discord_client);
-}
+    app.manage(localsend::LocalSendState::default());
 
-#[cfg(not(any(
-    target_os = "macos",
-    target_os = "windows",
-    all(target_os = "linux", not(target_env = "ohos"))
-)))]
-pub fn manage_reader_state(_app: &AppHandle) {}
+    #[cfg(any(
+        target_os = "macos",
+        target_os = "windows",
+        all(target_os = "linux", not(target_env = "ohos"))
+    ))]
+    {
+        use std::sync::{Arc, Mutex};
+        let discord_client = Arc::new(Mutex::new(discord_rpc::DiscordRpcClient::new()));
+        app.manage(discord_client);
+    }
+}
 
 /// Open a reader window that loads the embedded readest frontend (served by
 /// the host app under `/readest`). The book to open is handed to the frontend
@@ -619,6 +615,15 @@ pub fn reader_invoke_handler(
         ))]
         discord_rpc::clear_book_presence,
         clip_url::clip_url,
+        localsend::commands::localsend_start,
+        localsend::commands::localsend_stop,
+        localsend::commands::localsend_get_status,
+        localsend::commands::localsend_list_devices,
+        localsend::commands::localsend_announce,
+        localsend::commands::localsend_respond,
+        localsend::commands::localsend_cancel_receive,
+        localsend::commands::localsend_send_files,
+        localsend::commands::localsend_cancel_send,
     ]
 }
 
