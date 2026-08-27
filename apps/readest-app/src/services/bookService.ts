@@ -30,6 +30,12 @@ import { BookDoc, DocumentLoader } from '@/libs/document';
 import { hasMediaOverlays } from '@/services/tts/mediaOverlay';
 import { getAudiobookDirectory, isAudiobookFilePath } from '@/services/audiobook/storage';
 import { isAudiobook } from '@/utils/audiobook';
+import {
+  BookResourceLimitError,
+  assertImageDimensions,
+  assertImageInputSize,
+  readRasterImageDimensions,
+} from '@/utils/bookResourceLimits';
 import { tryNativeParseEpub } from '@/utils/tauriEpubBridge';
 import { tryNativeParseMobi } from '@/utils/tauriMobiBridge';
 import { isPseStreamFileName, openPseStreamBook, parsePseStreamFileName } from './opds/pseStream';
@@ -722,7 +728,14 @@ export async function importBook(
         } catch {}
       }
       if (cover) {
+        // Native imports already use the bounded Rust decoder; this repeated
+        // header-only check also protects web/fallback imports before the
+        // bookshelf or LocalSend asks the browser to decode the saved cover.
+        assertImageInputSize(cover.size);
         const coverBytes = await cover.arrayBuffer();
+        const dimensions = readRasterImageDimensions(coverBytes);
+        if (!dimensions) throw new BookResourceLimitError();
+        assertImageDimensions(dimensions.width, dimensions.height);
         await fs.writeFile(getCoverFilename(book), 'Books', coverBytes);
       }
     }

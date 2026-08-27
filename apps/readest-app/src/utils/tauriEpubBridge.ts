@@ -33,6 +33,7 @@
 // and is a no-op on the web platform.
 import { invoke } from '@tauri-apps/api/core';
 import { isTauriAppPlatform } from '@/services/environment';
+import { BookResourceLimitError, isBookResourceLimitError } from '@/utils/bookResourceLimits';
 import type { BookDoc, BookMetadata } from '@/libs/document';
 
 // ─── shared helpers ──────────────────────────────────────────────────
@@ -169,6 +170,7 @@ export const tryNativeParseEpub = async (
       bookDoc: buildBookDocStub(metadata, coverBlob),
     };
   } catch (err) {
+    if (isBookResourceLimitError(err)) throw new BookResourceLimitError();
     console.warn('[tauriEpubBridge] native parse failed, falling back to JS:', err);
     return null;
   }
@@ -249,6 +251,7 @@ export const tryNativePrefetchEpub = async (
     const sizes = new Map<string, number>(Object.entries(rust.sizes ?? {}));
     return { textCache, sizes, partialMd5: rust.partialMd5 };
   } catch (err) {
+    if (isBookResourceLimitError(err)) throw new BookResourceLimitError();
     console.warn('[tauriEpubBridge] native prefetch failed, falling back to JS:', err);
     return null;
   }
