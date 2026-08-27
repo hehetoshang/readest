@@ -28,6 +28,11 @@ import android.widget.TextView
 import app.tauri.annotation.InvokeArg
 import org.json.JSONObject
 import java.lang.ref.WeakReference
+import java.net.Inet4Address
+import java.net.Inet6Address
+import java.net.InetAddress
+import java.net.URI
+import java.util.concurrent.Executors
 
 /**
  * Args decoded from the JS `invoke('clip_url', { ... })` payload.
@@ -101,6 +106,8 @@ class ClipUrlController(
         // Settle delay after onPageFinished so IntersectionObserver-based
         // lazy-loaders fire for content already in the viewport.
         const val LOAD_SETTLE_MS: Long = 3_000
+        const val MAX_CAPTURE_HTML_BYTES: Int = 8 * 1024 * 1024
+        const val MAX_NAVIGATIONS: Int = 10
 
         // Mirrors `fingerprint_mask_script()` in `clip_url.rs`. Clears
         // the obvious bot-detection signals before any page script runs.
@@ -133,16 +140,68 @@ class ClipUrlController(
         // Shared cancel vocabulary with `ClipUrlController.swift` — the JS
         // side matches this string to stay quiet on user-initiated cancels.
         const val CANCELLED_MESSAGE = "Capture cancelled"
+
+        private fun isForbiddenAddress(address: InetAddress): Boolean {
+            if (address.isAnyLocalAddress || address.isLoopbackAddress ||
+                address.isLinkLocalAddress || address.isSiteLocalAddress ||
+                address.isMulticastAddress
+            ) return true
+            val bytes = address.address.map { it.toInt() and 0xff }
+            if (address is Inet4Address && bytes.size == 4) {
+                val a = bytes[0]
+                val b = bytes[1]
+                val c = bytes[2]
+                return a == 0 || a >= 240 ||
+                    (a == 100 && b in 64..127) ||
+                    (a == 100 && b == 100 && c == 100) ||
+                    (a == 192 && b == 0 && (c == 0 || c == 2)) ||
+                    (a == 198 && (b == 18 || b == 19)) ||
+                    (a == 198 && b == 51 && c == 100) ||
+                    (a == 203 && b == 0 && c == 113)
+            }
+            if (address is Inet6Address && bytes.size == 16) {
+                if (bytes.take(12).all { it == 0 } ||
+                    (bytes.take(10).all { it == 0 } && bytes[10] == 0xff && bytes[11] == 0xff)
+                ) {
+                    return isForbiddenAddress(
+                        InetAddress.getByAddress(bytes.drop(12).map { it.toByte() }.toByteArray()),
+                    )
+                }
+                return bytes[0] and 0xfe == 0xfc
+            }
+            return false
+        }
+
+        internal fun isPublicHttpUrl(value: String): Boolean = try {
+            val uri = URI(value)
+            val scheme = uri.scheme?.lowercase()
+            val host = uri.host?.trimEnd('.')?.lowercase()
+            if ((scheme != "http" && scheme != "https") || host.isNullOrBlank() ||
+                uri.userInfo != null || host == "localhost" || host.endsWith(".localhost") ||
+                host == "metadata.google.internal"
+            ) {
+                false
+            } else {
+                val addresses = InetAddress.getAllByName(host)
+                addresses.isNotEmpty() && addresses.none(::isForbiddenAddress)
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val dnsExecutor = Executors.newSingleThreadExecutor()
     private val interactiveMode = args.interactive == true
     private var dialog: Dialog? = null
     private var webView: WebView? = null
     private var statusLabel: TextView? = null
     private var didFinishOrFail = false
     private var captureFired = false
+    private var finished = false
     private var settled = false
+    private var approvedNavigation: String? = null
+    private var navigationCount = 0
     private val timeoutRunnable = Runnable { onTimeout() }
 
     fun show() {
@@ -283,6 +342,39 @@ class ClipUrlController(
         cookies.setAcceptThirdPartyCookies(wv, true)
 
         wv.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?,
+            ): Boolean {
+                if (request?.isForMainFrame != true || view == null) return false
+                val target = request.url.toString()
+                if (approvedNavigation == target) {
+                    approvedNavigation = null
+                    return false
+                }
+                navigationCount += 1
+                if (navigationCount > MAX_NAVIGATIONS) {
+                    finish(ClipUrlResult.Failure("Could not fetch this page: too many redirects"))
+                    return true
+                }
+                dnsExecutor.execute {
+                    val allowed = isPublicHttpUrl(target)
+                    mainHandler.post {
+                        if (allowed && webView === view) {
+                            approvedNavigation = target
+                            view.loadUrl(target)
+                        } else if (webView === view) {
+                            finish(
+                                ClipUrlResult.Failure(
+                                    "Could not fetch this page: URL target is not public",
+                                ),
+                            )
+                        }
+                    }
+                }
+                return true
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 // Interactive capture is user-driven: the page keeps
                 // navigating (login redirects) until Capture is tapped.
@@ -442,6 +534,8 @@ class ClipUrlController(
             }
             if (html.isEmpty()) {
                 finish(ClipUrlResult.Failure("Could not fetch this page: empty HTML"))
+            } else if (html.toByteArray(Charsets.UTF_8).size > MAX_CAPTURE_HTML_BYTES) {
+                finish(ClipUrlResult.Failure("Captured page is too large"))
             } else {
                 Log.d(TAG, "captured ${html.length} chars")
                 finish(ClipUrlResult.Success(html))
@@ -456,7 +550,10 @@ class ClipUrlController(
     }
 
     private fun finish(result: ClipUrlResult) {
+        if (finished) return
+        finished = true
         mainHandler.removeCallbacks(timeoutRunnable)
+        dnsExecutor.shutdownNow()
         try {
             // Persist any session the page established (interactive
             // sign-in) so later headless clips reuse it.

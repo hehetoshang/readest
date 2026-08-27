@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import os
+import Darwin
 
 private let clipLogger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "ClipUrl")
 
@@ -85,6 +86,8 @@ final class ClipUrlController: UIViewController, WKNavigationDelegate {
   // Settle delay after `didFinish` so IntersectionObserver-based lazy
   // loaders fire for content already in the viewport.
   static let loadSettleSeconds: TimeInterval = 3
+  static let maxCaptureHtmlBytes = 8 * 1024 * 1024
+  static let maxNavigations = 10
 
   private let args: ClipUrlArgs
   private let completion: (Result<String, ClipUrlError>) -> Void
@@ -94,7 +97,9 @@ final class ClipUrlController: UIViewController, WKNavigationDelegate {
   private var statusLabel: UILabel!
   private var didFinishOrFail = false
   private var captureFired = false
+  private var finished = false
   private var timeoutWorkItem: DispatchWorkItem?
+  private var navigationCount = 0
 
   init(args: ClipUrlArgs, completion: @escaping (Result<String, ClipUrlError>) -> Void) {
     self.args = args
@@ -339,6 +344,39 @@ final class ClipUrlController: UIViewController, WKNavigationDelegate {
   }
 
   func webView(
+    _ webView: WKWebView,
+    decidePolicyFor navigationAction: WKNavigationAction,
+    decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+  ) {
+    guard navigationAction.targetFrame?.isMainFrame != false,
+      let target = navigationAction.request.url
+    else {
+      decisionHandler(.allow)
+      return
+    }
+    navigationCount += 1
+    guard navigationCount <= ClipUrlController.maxNavigations else {
+      decisionHandler(.cancel)
+      finish(.failure(.loadFailed("too many redirects")))
+      return
+    }
+    ClipUrlController.isPublicHttpUrl(target) { [weak self] allowed in
+      DispatchQueue.main.async {
+        guard let self = self, self.webView === webView else {
+          decisionHandler(.cancel)
+          return
+        }
+        if allowed {
+          decisionHandler(.allow)
+        } else {
+          decisionHandler(.cancel)
+          self.finish(.failure(.loadFailed("URL target is not public")))
+        }
+      }
+    }
+  }
+
+  func webView(
     _ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error
   ) {
     // A failed hop mid-sign-in shouldn't tear the flow down — the page
@@ -365,8 +403,12 @@ final class ClipUrlController: UIViewController, WKNavigationDelegate {
     webView.evaluateJavaScript("document.documentElement.outerHTML") { [weak self] result, error in
       guard let self = self else { return }
       if let html = result as? String, !html.isEmpty {
-        clipLogger.log("clip_url: captured \(html.count, privacy: .public) chars")
-        self.finish(.success(html))
+        if html.lengthOfBytes(using: .utf8) > ClipUrlController.maxCaptureHtmlBytes {
+          self.finish(.failure(.loadFailed("captured page is too large")))
+        } else {
+          clipLogger.log("clip_url: captured \(html.count, privacy: .public) chars")
+          self.finish(.success(html))
+        }
       } else {
         let detail = error?.localizedDescription ?? "empty HTML"
         self.finish(.failure(.loadFailed(detail)))
@@ -375,6 +417,8 @@ final class ClipUrlController: UIViewController, WKNavigationDelegate {
   }
 
   private func finish(_ result: Result<String, ClipUrlError>) {
+    guard !finished else { return }
+    finished = true
     timeoutWorkItem?.cancel()
     timeoutWorkItem = nil
     // Stop the WebView before dismissing — otherwise its JS keeps
@@ -409,6 +453,90 @@ final class ClipUrlController: UIViewController, WKNavigationDelegate {
         } catch (e) {}
       })();
       """
+  }
+
+  private static func isForbiddenIPv4(_ bytes: [UInt8]) -> Bool {
+    guard bytes.count == 4 else { return true }
+    let a = Int(bytes[0]), b = Int(bytes[1]), c = Int(bytes[2])
+    return a == 0 || a == 10 || a == 127 || a >= 224
+      || (a == 169 && b == 254)
+      || (a == 172 && (16...31).contains(b))
+      || (a == 192 && b == 168)
+      || (a == 100 && (64...127).contains(b))
+      || (a == 100 && b == 100 && c == 100)
+      || (a == 192 && b == 0 && (c == 0 || c == 2))
+      || (a == 198 && (b == 18 || b == 19))
+      || (a == 198 && b == 51 && c == 100)
+      || (a == 203 && b == 0 && c == 113)
+  }
+
+  private static func isForbiddenIPv6(_ bytes: [UInt8]) -> Bool {
+    guard bytes.count == 16 else { return true }
+    if bytes.allSatisfy({ $0 == 0 }) { return true }
+    if bytes.dropLast().allSatisfy({ $0 == 0 }) && bytes.last == 1 { return true }
+    if bytes[0] == 0xff || bytes[0] & 0xfe == 0xfc { return true }
+    if bytes[0] == 0xfe && bytes[1] & 0xc0 == 0x80 { return true }
+    if bytes[0..<12].allSatisfy({ $0 == 0 })
+      || (bytes[0..<10].allSatisfy({ $0 == 0 }) && bytes[10] == 0xff && bytes[11] == 0xff)
+    {
+      return isForbiddenIPv4(Array(bytes[12..<16]))
+    }
+    return false
+  }
+
+  /// Resolve every main-frame navigation off the UI thread and reject the
+  /// whole DNS answer set if any address is local/private/reserved.
+  private static func isPublicHttpUrl(_ url: URL, completion: @escaping (Bool) -> Void) {
+    guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+      url.user == nil, url.password == nil, let rawHost = url.host
+    else {
+      completion(false)
+      return
+    }
+    let host = rawHost.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
+    guard host != "localhost", !host.hasSuffix(".localhost"),
+      host != "metadata.google.internal"
+    else {
+      completion(false)
+      return
+    }
+    DispatchQueue.global(qos: .userInitiated).async {
+      var hints = addrinfo()
+      hints.ai_flags = AI_ADDRCONFIG
+      hints.ai_family = AF_UNSPEC
+      hints.ai_socktype = Int32(SOCK_STREAM.rawValue)
+      hints.ai_protocol = IPPROTO_TCP
+      var head: UnsafeMutablePointer<addrinfo>?
+      let status = host.withCString { getaddrinfo($0, nil, &hints, &head) }
+      guard status == 0, let first = head else {
+        completion(false)
+        return
+      }
+      defer { freeaddrinfo(first) }
+      var cursor: UnsafeMutablePointer<addrinfo>? = first
+      var found = false
+      var allowed = true
+      while let current = cursor {
+        let family = current.pointee.ai_family
+        if family == AF_INET {
+          var address = current.pointee.ai_addr.withMemoryRebound(
+            to: sockaddr_in.self, capacity: 1
+          ) { $0.pointee.sin_addr }
+          let bytes = withUnsafeBytes(of: &address) { Array($0) }
+          found = true
+          allowed = allowed && !isForbiddenIPv4(bytes)
+        } else if family == AF_INET6 {
+          var address = current.pointee.ai_addr.withMemoryRebound(
+            to: sockaddr_in6.self, capacity: 1
+          ) { $0.pointee.sin6_addr }
+          let bytes = withUnsafeBytes(of: &address) { Array($0) }
+          found = true
+          allowed = allowed && !isForbiddenIPv6(bytes)
+        }
+        cursor = current.pointee.ai_next
+      }
+      completion(found && allowed)
+    }
   }
 }
 

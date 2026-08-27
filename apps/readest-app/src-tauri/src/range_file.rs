@@ -63,6 +63,30 @@ fn bounded_range(total: u64, start: u64, end: Option<u64>) -> (u64, u64) {
     (start, len)
 }
 
+fn read_bounded_range<R: Read + Seek>(
+    reader: &mut R,
+    total: u64,
+    requested_start: u64,
+    requested_end: Option<u64>,
+) -> std::io::Result<Vec<u8>> {
+    let (start, nbytes) = bounded_range(total, requested_start, requested_end);
+    if nbytes == 0 {
+        return Ok(Vec::new());
+    }
+    reader.seek(SeekFrom::Start(start))?;
+    let mut bytes = vec![0; nbytes as usize];
+    let mut filled = 0;
+    while filled < bytes.len() {
+        let read = reader.read(&mut bytes[filled..])?;
+        if read == 0 {
+            break;
+        }
+        filled += read;
+    }
+    bytes.truncate(filled);
+    Ok(bytes)
+}
+
 fn parse_query(uri_query: Option<&str>) -> Option<RangeQuery> {
     let query = uri_query?;
     let mut path: Option<PathBuf> = None;
@@ -81,8 +105,8 @@ fn parse_query(uri_query: Option<&str>) -> Option<RangeQuery> {
                     path = Some(PathBuf::from(decoded));
                 }
             }
-            "start" => start = val.parse().unwrap_or(0),
-            "end" => end = val.parse().ok(),
+            "start" => start = val.parse().ok()?,
+            "end" => end = Some(val.parse().ok()?),
             _ => {}
         }
     }
@@ -110,6 +134,10 @@ pub fn handle<R: Runtime>(
     request: Request<Vec<u8>>,
     responder: UriSchemeResponder,
 ) {
+    // Derive CORS from the actual requesting WebView, like Tauri's built-in
+    // asset protocol. Never trust or reflect the request's Origin value.
+    let trusted_origin = pinned_window_origin(&ctx);
+
     // Android invokes custom protocols from WebView's shouldInterceptRequest
     // worker and waits for the response on that worker. Handing the responder
     // to Tauri's blocking pool can leave that intercepted request pending in
@@ -119,7 +147,11 @@ pub fn handle<R: Runtime>(
     // rangefile implementation did.
     match response_dispatch(cfg!(target_os = "android")) {
         ResponseDispatch::CurrentWorker => {
-            responder.respond(build_response(ctx.app_handle(), &request));
+            responder.respond(build_response(
+                ctx.app_handle(),
+                &request,
+                trusted_origin.as_deref(),
+            ));
         }
         // WKWebView invokes the scheme handler on the main thread. Keep Apple
         // and desktop platforms on the blocking pool so scope canonicalization
@@ -127,55 +159,172 @@ pub fn handle<R: Runtime>(
         ResponseDispatch::BlockingPool => {
             let app = ctx.app_handle().clone();
             tauri::async_runtime::spawn_blocking(move || {
-                responder.respond(build_response(&app, &request));
+                responder.respond(build_response(&app, &request, trusted_origin.as_deref()));
             });
         }
     }
 }
 
-fn cors_origin(request: &Request<Vec<u8>>) -> String {
+fn trusted_app_origin(label: &str, url: &tauri::Url) -> Option<String> {
+    let trusted_label =
+        label == "main" || label.starts_with("reader-") || label.starts_with("moke-home-");
+    if !trusted_label {
+        return None;
+    }
+
+    let host = url.host_str().unwrap_or_default();
+    let trusted = matches!(
+        (url.scheme(), host, url.port()),
+        ("tauri", "localhost", None)
+            | ("http" | "https", "tauri.localhost", None)
+            | (
+                "http",
+                "localhost" | "127.0.0.1" | "[::1]" | "::1",
+                Some(3000) | Some(3001)
+            )
+    );
+    trusted.then(|| {
+        format!(
+            "{}://{}{}",
+            url.scheme(),
+            host,
+            url.port()
+                .map(|port| format!(":{port}"))
+                .unwrap_or_default()
+        )
+    })
+}
+
+fn pinned_window_origin<R: Runtime>(ctx: &UriSchemeContext<'_, R>) -> Option<String> {
+    let webview = ctx.app_handle().get_webview_window(ctx.webview_label())?;
+    let url = webview.url().ok()?;
+    trusted_app_origin(ctx.webview_label(), &url)
+}
+
+fn request_origin(request: &Request<Vec<u8>>) -> Option<&str> {
     request
         .headers()
         .get("origin")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| "*".to_string())
+        .and_then(|value| value.to_str().ok())
 }
 
-fn error(origin: &str, status: StatusCode) -> Response<Vec<u8>> {
-    Response::builder()
+fn validate_request_origin<'a>(
+    trusted_origin: Option<&'a str>,
+    supplied_origin: Option<&str>,
+    is_preflight: bool,
+) -> Result<&'a str, StatusCode> {
+    let trusted_origin = trusted_origin.ok_or(StatusCode::FORBIDDEN)?;
+    if supplied_origin.is_some_and(|origin| origin != trusted_origin)
+        || (is_preflight && supplied_origin.is_none())
+    {
+        Err(StatusCode::FORBIDDEN)
+    } else {
+        Ok(trusted_origin)
+    }
+}
+
+fn response_builder(status: StatusCode, origin: Option<&str>) -> tauri::http::response::Builder {
+    let builder = Response::builder()
         .status(status)
-        .header("Access-Control-Allow-Origin", origin)
         .header("Cache-Control", "no-store")
+        .header("Vary", "Origin");
+    if let Some(origin) = origin {
+        builder.header("Access-Control-Allow-Origin", origin)
+    } else {
+        builder
+    }
+}
+
+fn error(origin: Option<&str>, status: StatusCode) -> Response<Vec<u8>> {
+    response_builder(status, origin).body(Vec::new()).unwrap()
+}
+
+fn preflight(origin: &str) -> Response<Vec<u8>> {
+    response_builder(StatusCode::NO_CONTENT, Some(origin))
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .header("Access-Control-Allow-Headers", "Content-Type")
+        .header("Access-Control-Max-Age", "600")
         .body(Vec::new())
         .unwrap()
 }
 
-fn build_response<R: Runtime>(app: &AppHandle<R>, request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
-    let origin = cors_origin(request);
+fn is_sensitive_protocol_path(path: &Path) -> bool {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    let file_name = normalized
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    matches!(
+        file_name.as_str(),
+        "moke-downloads.json"
+            | "moke-downloads.json.tmp"
+            | "download-directory.json"
+            | "download-directory.json.tmp"
+            | "settings.json"
+            | "settings.json.bak"
+            | "feeds.json"
+            | "feeds.json.bak"
+    )
+}
+
+fn build_response<R: Runtime>(
+    app: &AppHandle<R>,
+    request: &Request<Vec<u8>>,
+    trusted_origin: Option<&str>,
+) -> Response<Vec<u8>> {
+    let is_preflight = request.method() == tauri::http::Method::OPTIONS;
+    let origin =
+        match validate_request_origin(trusted_origin, request_origin(request), is_preflight) {
+            Ok(origin) => origin,
+            Err(status) => return error(trusted_origin, status),
+        };
+    if is_preflight {
+        return preflight(origin);
+    }
+    if request.method() != tauri::http::Method::GET {
+        return error(Some(origin), StatusCode::METHOD_NOT_ALLOWED);
+    }
 
     let query = match parse_query(request.uri().query()) {
         Some(q) => q,
-        None => return error(&origin, StatusCode::BAD_REQUEST),
+        None => return error(Some(origin), StatusCode::BAD_REQUEST),
     };
 
     // Defense-in-depth: reject traversal/NUL/relative paths outright.
     if !is_safe_path(&query.path) {
         log::warn!("rangefile: rejected unsafe path: {:?}", query.path);
-        return error(&origin, StatusCode::FORBIDDEN);
+        return error(Some(origin), StatusCode::FORBIDDEN);
+    }
+
+    let canonical_path = match query.path.canonicalize() {
+        Ok(path) => path,
+        Err(error_value) => {
+            let status = match error_value.kind() {
+                std::io::ErrorKind::NotFound => StatusCode::NOT_FOUND,
+                std::io::ErrorKind::PermissionDenied => StatusCode::FORBIDDEN,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            return error(Some(origin), status);
+        }
+    };
+
+    if is_sensitive_protocol_path(&query.path) || is_sensitive_protocol_path(&canonical_path) {
+        log::warn!("rangefile: rejected sensitive application file");
+        return error(Some(origin), StatusCode::FORBIDDEN);
     }
 
     // Security: identical boundary to the asset protocol — only paths the
     // importer/picker has granted are readable.
-    if !app.asset_protocol_scope().is_allowed(&query.path) {
+    if !app.asset_protocol_scope().is_allowed(&canonical_path) {
         log::warn!(
             "rangefile: path not allowed by asset scope: {:?}",
             query.path
         );
-        return error(&origin, StatusCode::FORBIDDEN);
+        return error(Some(origin), StatusCode::FORBIDDEN);
     }
 
-    let mut file = match File::open(&query.path) {
+    let mut file = match File::open(&canonical_path) {
         Ok(f) => f,
         Err(e) => {
             let status = match e.kind() {
@@ -183,38 +332,23 @@ fn build_response<R: Runtime>(app: &AppHandle<R>, request: &Request<Vec<u8>>) ->
                 std::io::ErrorKind::PermissionDenied => StatusCode::FORBIDDEN,
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             };
-            return error(&origin, status);
+            return error(Some(origin), status);
         }
     };
 
     let total = match file.metadata() {
         Ok(m) => m.len(),
-        Err(_) => return error(&origin, StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => return error(Some(origin), StatusCode::INTERNAL_SERVER_ERROR),
     };
 
-    let (start, nbytes) = bounded_range(total, query.start, query.end);
-
-    let mut buf = vec![0u8; nbytes as usize];
-    if nbytes > 0 {
-        if file.seek(SeekFrom::Start(start)).is_err() {
-            return error(&origin, StatusCode::INTERNAL_SERVER_ERROR);
-        }
-        let mut filled = 0usize;
-        while filled < buf.len() {
-            match file.read(&mut buf[filled..]) {
-                Ok(0) => break,
-                Ok(n) => filled += n,
-                Err(_) => return error(&origin, StatusCode::INTERNAL_SERVER_ERROR),
-            }
-        }
-        buf.truncate(filled);
-    }
+    let buf = match read_bounded_range(&mut file, total, query.start, query.end) {
+        Ok(bytes) => bytes,
+        Err(_) => return error(Some(origin), StatusCode::INTERNAL_SERVER_ERROR),
+    };
 
     // 200 (not 206) and NO `Content-Range`: the range was carried in the URL,
     // not a `Range` header, so the WebView delivers this body verbatim.
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", origin)
+    response_builder(StatusCode::OK, Some(origin))
         .header(
             "Access-Control-Expose-Headers",
             "X-Total-Size, Content-Length",
@@ -260,6 +394,13 @@ mod tests {
         let q = parse_query(Some("path=%2Fa&start=5")).unwrap();
         assert_eq!(q.start, 5);
         assert_eq!(q.end, None);
+    }
+
+    #[test]
+    fn malformed_range_values_are_rejected() {
+        assert!(parse_query(Some("path=%2Fa&start=wat&end=10")).is_none());
+        assert!(parse_query(Some("path=%2Fa&start=0&end=wat")).is_none());
+        assert!(parse_query(Some("path=%2Fa&start=-1&end=10")).is_none());
     }
 
     #[test]
@@ -326,5 +467,143 @@ mod tests {
             bounded_range(MAX_RANGE_LEN * 2, 0, None),
             (0, MAX_RANGE_LEN)
         );
+    }
+
+    #[test]
+    fn reads_a_legal_inclusive_range() {
+        let mut file = std::io::Cursor::new(b"0123456789".to_vec());
+        assert_eq!(
+            read_bounded_range(&mut file, 10, 2, Some(5)).unwrap(),
+            b"2345"
+        );
+    }
+
+    #[test]
+    fn cors_origin_is_derived_from_the_requesting_app_window() {
+        for (label, url) in [
+            ("main", "tauri://localhost/library"),
+            ("reader-42", "http://tauri.localhost/readest/reader"),
+            ("moke-home-1", "https://tauri.localhost/readest/library"),
+            ("main", "http://localhost:3000/library"),
+            ("reader-42", "http://127.0.0.1:3001/reader"),
+        ] {
+            let url = tauri::Url::parse(url).unwrap();
+            assert!(trusted_app_origin(label, &url).is_some(), "{label} {url}");
+        }
+        for (label, url) in [
+            ("clip-attacker", "https://example.com"),
+            ("reader-42", "https://example.com"),
+            ("main", "http://localhost:4444"),
+            ("untrusted", "http://tauri.localhost"),
+        ] {
+            let url = tauri::Url::parse(url).unwrap();
+            assert!(trusted_app_origin(label, &url).is_none(), "{label} {url}");
+        }
+    }
+
+    #[test]
+    fn malicious_origins_and_originless_preflights_are_rejected() {
+        let trusted = "http://tauri.localhost";
+        assert_eq!(
+            validate_request_origin(Some(trusted), Some(trusted), true),
+            Ok(trusted)
+        );
+        assert_eq!(
+            validate_request_origin(Some(trusted), Some("https://evil.example"), false),
+            Err(StatusCode::FORBIDDEN)
+        );
+        assert_eq!(
+            validate_request_origin(Some(trusted), None, true),
+            Err(StatusCode::FORBIDDEN)
+        );
+        assert_eq!(
+            validate_request_origin(None, Some(trusted), false),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    fn preflight_and_errors_always_emit_the_pinned_origin() {
+        let response = preflight("http://tauri.localhost");
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            response
+                .headers()
+                .get("Access-Control-Allow-Origin")
+                .unwrap(),
+            "http://tauri.localhost"
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get("Access-Control-Allow-Methods")
+                .unwrap(),
+            "GET, OPTIONS"
+        );
+
+        let response = error(Some("http://tauri.localhost"), StatusCode::FORBIDDEN);
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            response
+                .headers()
+                .get("Access-Control-Allow-Origin")
+                .unwrap(),
+            "http://tauri.localhost"
+        );
+        assert_ne!(
+            response
+                .headers()
+                .get("Access-Control-Allow-Origin")
+                .unwrap(),
+            "https://evil.example"
+        );
+        assert_eq!(response.headers().get("Cache-Control").unwrap(), "no-store");
+    }
+
+    #[test]
+    fn sensitive_indexes_and_settings_are_never_served() {
+        for path in [
+            "/appdata/moke-downloads.json",
+            "/appdata/download-directory.json",
+            "/appconfig/settings.json",
+            "/appconfig/settings.json.bak",
+            "/appconfig/feeds.json",
+            "/appconfig/feeds.json.bak",
+            r"C:\Users\u\AppData\Roaming\Moke\MOKE-DOWNLOADS.JSON",
+        ] {
+            assert!(is_sensitive_protocol_path(Path::new(path)), "{path}");
+        }
+        assert!(!is_sensitive_protocol_path(Path::new(
+            "/appdata/books/novel.epub"
+        )));
+    }
+
+    #[test]
+    fn standalone_asset_scope_uses_only_an_app_specific_temp_subdirectory() {
+        let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+        let config: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(config_path).unwrap()).unwrap();
+        let allow = config["app"]["security"]["assetProtocol"]["scope"]["allow"]
+            .as_array()
+            .unwrap();
+        let paths: Vec<_> = allow.iter().filter_map(|value| value.as_str()).collect();
+        assert!(!paths
+            .iter()
+            .any(|path| *path == "$TEMP/**/*" || *path == "$TEMP/**"));
+        assert!(paths.iter().any(|path| path.starts_with("$TEMP/readest/")));
+        assert!(!paths.iter().any(|path| path.starts_with("**/")));
+
+        let deny = config["app"]["security"]["assetProtocol"]["scope"]["deny"]
+            .as_array()
+            .unwrap();
+        let denied_paths: Vec<_> = deny.iter().filter_map(|value| value.as_str()).collect();
+        for path in [
+            "$APPDATA/moke-downloads.json",
+            "$APPDATA/download-directory.json",
+            "$APPCONFIG/settings.json",
+            "$APPCONFIG/feeds.json",
+        ] {
+            assert!(denied_paths.contains(&path), "{path} must be denied");
+        }
     }
 }

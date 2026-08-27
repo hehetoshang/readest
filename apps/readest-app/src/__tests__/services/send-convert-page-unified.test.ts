@@ -119,6 +119,32 @@ describe('convertPageToEpub — clipping channel unification', () => {
     await reader.close();
   });
 
+  test('sanitizes clip_url HTML before it is written into the EPUB', async () => {
+    const hostile = HTML.replace(
+      '<article>',
+      `<article onclick="parent.__TAURI_INTERNALS__.invoke('evil')">
+        <script>parent.__TAURI_INTERNALS__.invoke('evil')</script>
+        <iframe src="https://evil.example/phish"></iframe>
+        <a href="javascript:parent.__TAURI_INTERNALS__.invoke('evil')">unsafe link</a>
+        <img src="https://example.com/tracker.png" onerror="parent.__TAURI_INTERNALS__.invoke('evil')">`,
+    );
+    const { file } = await convertPageToEpub(hostile, URL_STR);
+    const { BlobReader, TextWriter, ZipReader } = await import('@zip.js/zip.js');
+    const reader = new ZipReader(new BlobReader(file));
+    const entry = (await reader.getEntries()).find(
+      (item) => item.filename === 'OEBPS/chapter1.xhtml',
+    );
+    if (!entry || !('getData' in entry) || !entry.getData) {
+      throw new Error('chapter1.xhtml missing');
+    }
+    const chapter = await entry.getData(new TextWriter());
+    await reader.close();
+
+    expect(chapter).toContain('unsafe link');
+    expect(chapter).not.toMatch(/<script|<iframe|onclick=|onerror=|javascript:/iu);
+    expect(chapter).not.toContain('__TAURI_INTERNALS__');
+  });
+
   test('resolves relative image URLs against the page, not the calling realm', async () => {
     // Readability rewrites relative refs against the parsed document's base
     // URI, which `DOMParser` inherits from whoever called it — the
