@@ -48,12 +48,14 @@ use std::borrow::Cow;
 use std::fs::File;
 use std::io::{Read, Seek};
 use std::path::Path;
+use tauri::AppHandle;
 use zip::ZipArchive;
 
 // Cover constants + helpers + RawCoverImage type are shared with `mobi_parser`
 // via `parser_common`, so a single tweak (e.g. raising the thumbnail target)
 // applies to every native importer.
 use crate::parser_common::{compute_partial_md5, maybe_resize_cover, RawCoverImage};
+use crate::path_authorization::{authorize_path, AuthorizedRoots, PathAccess};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +84,11 @@ pub struct ParsedEpubMetadata {
 }
 
 #[tauri::command]
-pub async fn parse_epub_metadata(file_path: String) -> Result<ParsedEpubMetadata, String> {
+pub async fn parse_epub_metadata(
+    app: AppHandle,
+    file_path: String,
+) -> Result<ParsedEpubMetadata, String> {
+    let file_path = authorize_path(&app, &file_path, PathAccess::Read, AuthorizedRoots::Books)?;
     // The body is CPU+IO bound: zip central-directory parse, OPF parse,
     // cover decode/resize/encode. We must NOT run that on the Tauri
     // async runtime worker (the IPC dispatch thread), because then four
@@ -93,10 +99,9 @@ pub async fn parse_epub_metadata(file_path: String) -> Result<ParsedEpubMetadata
         .map_err(|e| format!("join error: {e}"))?
 }
 
-fn parse_epub_metadata_sync(file_path: &str) -> Result<ParsedEpubMetadata, String> {
-    let path = Path::new(file_path);
-    if !path.exists() {
-        return Err(format!("file not found: {file_path}"));
+fn parse_epub_metadata_sync(path: &Path) -> Result<ParsedEpubMetadata, String> {
+    if !path.is_file() {
+        return Err(format!("file not found: {}", path.display()));
     }
 
     let partial_md5 = compute_partial_md5(path).map_err(|e| format!("partial_md5 failed: {e}"))?;
@@ -154,16 +159,19 @@ fn parse_epub_metadata_sync(file_path: &str) -> Result<ParsedEpubMetadata, Strin
 /// Returns the raw image bytes plus the MIME guessed from the manifest path.
 /// If the EPUB has no cover this returns `Err`.
 #[tauri::command]
-pub async fn extract_epub_cover_full(file_path: String) -> Result<RawCoverImage, String> {
+pub async fn extract_epub_cover_full(
+    app: AppHandle,
+    file_path: String,
+) -> Result<RawCoverImage, String> {
+    let file_path = authorize_path(&app, &file_path, PathAccess::Read, AuthorizedRoots::Books)?;
     tauri::async_runtime::spawn_blocking(move || extract_epub_cover_full_sync(&file_path))
         .await
         .map_err(|e| format!("join error: {e}"))?
 }
 
-fn extract_epub_cover_full_sync(file_path: &str) -> Result<RawCoverImage, String> {
-    let path = Path::new(file_path);
-    if !path.exists() {
-        return Err(format!("file not found: {file_path}"));
+fn extract_epub_cover_full_sync(path: &Path) -> Result<RawCoverImage, String> {
+    if !path.is_file() {
+        return Err(format!("file not found: {}", path.display()));
     }
     let file = File::open(path).map_err(|e| format!("open failed: {e}"))?;
     let mut zip = ZipArchive::new(file).map_err(|e| format!("zip open failed: {e}"))?;
@@ -250,7 +258,8 @@ pub struct ParsedEpubFull {
 }
 
 #[tauri::command]
-pub async fn parse_epub_full(file_path: String) -> Result<ParsedEpubFull, String> {
+pub async fn parse_epub_full(app: AppHandle, file_path: String) -> Result<ParsedEpubFull, String> {
+    let file_path = authorize_path(&app, &file_path, PathAccess::Read, AuthorizedRoots::Books)?;
     // Same threading rationale as parse_epub_metadata — keep IPC dispatch off
     // the CPU-bound zip/parse work so concurrent opens stay parallel.
     tauri::async_runtime::spawn_blocking(move || parse_epub_full_sync(&file_path))
@@ -258,10 +267,9 @@ pub async fn parse_epub_full(file_path: String) -> Result<ParsedEpubFull, String
         .map_err(|e| format!("join error: {e}"))?
 }
 
-fn parse_epub_full_sync(file_path: &str) -> Result<ParsedEpubFull, String> {
-    let path = Path::new(file_path);
-    if !path.exists() {
-        return Err(format!("file not found: {file_path}"));
+fn parse_epub_full_sync(path: &Path) -> Result<ParsedEpubFull, String> {
+    if !path.is_file() {
+        return Err(format!("file not found: {}", path.display()));
     }
 
     let partial_md5 = compute_partial_md5(path).map_err(|e| format!("partial_md5 failed: {e}"))?;

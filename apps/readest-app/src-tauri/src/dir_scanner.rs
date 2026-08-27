@@ -1,7 +1,8 @@
 use std::path::Path;
 use tauri::AppHandle;
-use tauri_plugin_fs::FsExt;
 use walkdir::WalkDir;
+
+use crate::path_authorization::{authorize_path, AuthorizedRoots, PathAccess};
 
 #[derive(serde::Serialize)]
 pub struct ScannedFile {
@@ -16,12 +17,7 @@ pub async fn read_dir(
     recursive: bool,
     extensions: Vec<String>,
 ) -> Result<Vec<ScannedFile>, String> {
-    let scope = app.fs_scope();
-    let path_buf = std::path::PathBuf::from(&path);
-
-    if !scope.is_allowed(&path_buf) && !path_buf.to_string_lossy().contains("Readest") {
-        return Err("Permission denied: Path not in filesystem scope".to_string());
-    }
+    let path = authorize_path(&app, &path, PathAccess::Read, AuthorizedRoots::AppStorage)?;
 
     // The walk stats every matching file; on a large watched folder that is
     // thousands of syscalls. A sync command would run them inline on the IPC
@@ -33,11 +29,10 @@ pub async fn read_dir(
 }
 
 fn read_dir_sync(
-    path: &str,
+    path: &Path,
     recursive: bool,
     extensions: &[String],
 ) -> Result<Vec<ScannedFile>, String> {
-    let path_buf = std::path::PathBuf::from(path);
     let mut files = Vec::new();
 
     let normalized_extensions: Vec<String> =
@@ -61,7 +56,7 @@ fn read_dir_sync(
             }
         }
     } else {
-        match std::fs::read_dir(&path_buf) {
+        match std::fs::read_dir(path) {
             Ok(entries) => {
                 for entry_result in entries {
                     match entry_result {

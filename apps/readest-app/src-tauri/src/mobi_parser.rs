@@ -36,8 +36,10 @@ use mobi::headers::ExthRecord;
 use mobi::Mobi;
 use serde::Serialize;
 use std::path::Path;
+use tauri::AppHandle;
 
 use crate::parser_common::{compute_partial_md5, maybe_resize_cover, RawCoverImage};
+use crate::path_authorization::{authorize_path, AuthorizedRoots, PathAccess};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,16 +59,16 @@ pub struct ParsedMobi {
 /// whole file synchronously and parsing a 50 MB AZW3 can take tens of
 /// milliseconds — long enough to want it off the Tauri main runtime.
 #[tauri::command]
-pub async fn parse_mobi_metadata(file_path: String) -> Result<ParsedMobi, String> {
+pub async fn parse_mobi_metadata(app: AppHandle, file_path: String) -> Result<ParsedMobi, String> {
+    let file_path = authorize_path(&app, &file_path, PathAccess::Read, AuthorizedRoots::Books)?;
     tauri::async_runtime::spawn_blocking(move || parse_mobi_metadata_sync(&file_path))
         .await
         .map_err(|e| format!("join error: {e}"))?
 }
 
-fn parse_mobi_metadata_sync(file_path: &str) -> Result<ParsedMobi, String> {
-    let path = Path::new(file_path);
+fn parse_mobi_metadata_sync(path: &Path) -> Result<ParsedMobi, String> {
     if !path.is_file() {
-        return Err(format!("file not found: {file_path}"));
+        return Err(format!("file not found: {}", path.display()));
     }
 
     let partial_md5 = compute_partial_md5(path).map_err(|e| format!("partial_md5 failed: {e}"))?;
@@ -93,16 +95,19 @@ fn parse_mobi_metadata_sync(file_path: &str) -> Result<ParsedMobi, String> {
 ///
 /// Returns `Err` only when the file has no embedded cover at all.
 #[tauri::command]
-pub async fn extract_mobi_cover_full(file_path: String) -> Result<RawCoverImage, String> {
+pub async fn extract_mobi_cover_full(
+    app: AppHandle,
+    file_path: String,
+) -> Result<RawCoverImage, String> {
+    let file_path = authorize_path(&app, &file_path, PathAccess::Read, AuthorizedRoots::Books)?;
     tauri::async_runtime::spawn_blocking(move || extract_mobi_cover_full_sync(&file_path))
         .await
         .map_err(|e| format!("join error: {e}"))?
 }
 
-fn extract_mobi_cover_full_sync(file_path: &str) -> Result<RawCoverImage, String> {
-    let path = Path::new(file_path);
+fn extract_mobi_cover_full_sync(path: &Path) -> Result<RawCoverImage, String> {
     if !path.is_file() {
-        return Err(format!("file not found: {file_path}"));
+        return Err(format!("file not found: {}", path.display()));
     }
     let mobi = Mobi::from_path(path).map_err(|e| format!("parse mobi: {e}"))?;
     extract_cover(&mobi).ok_or_else(|| "no cover image in mobi".to_string())

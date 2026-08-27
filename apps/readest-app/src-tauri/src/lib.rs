@@ -39,6 +39,7 @@ mod mobi_parser;
 // Moke embedded reader: the nightly updater (tauri-plugin-updater) is disabled.
 // mod nightly_update;
 mod parser_common;
+mod path_authorization;
 mod range_file;
 mod sentry_config;
 #[cfg(desktop)]

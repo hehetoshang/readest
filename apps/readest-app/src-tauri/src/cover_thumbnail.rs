@@ -1,5 +1,5 @@
 use crate::parser_common::{COVER_JPEG_QUALITY, COVER_MAX_LONG_EDGE, COVER_RESIZE_FILTER};
-use crate::transfer_file::ensure_path_allowed;
+use crate::path_authorization::{authorize_path, AuthorizedRoots, PathAccess};
 use image::{codecs::jpeg::JpegEncoder, GenericImageView};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
@@ -169,10 +169,15 @@ pub fn optimize_cover_thumbnails(
     cache_dir: String,
     covers: Vec<CoverThumbnailRequest>,
 ) -> Result<(), String> {
-    ensure_path_allowed(&app, &books_dir).map_err(|error| error.to_string())?;
-    ensure_path_allowed(&app, &cache_dir).map_err(|error| error.to_string())?;
+    let books_dir = authorize_path(&app, &books_dir, PathAccess::Read, AuthorizedRoots::Books)?;
+    let cache_dir = authorize_path(
+        &app,
+        &cache_dir,
+        PathAccess::Write,
+        AuthorizedRoots::AppStorage,
+    )?;
 
-    let jobs = build_jobs(Path::new(&books_dir), Path::new(&cache_dir), covers);
+    let jobs = build_jobs(&books_dir, &cache_dir, covers);
     let should_start = lock_queue().enqueue(jobs);
     if should_start {
         spawn_worker(app);
