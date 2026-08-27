@@ -9,6 +9,7 @@ import {
   uninstallConsoleCapture,
   uninstallNetworkCapture,
 } from '@/services/debugLog';
+import { readPersistedMokeDebugPanel } from '@/helpers/mokeLaunchContext';
 
 // The launch globals are injected before the Next bundle. Start capturing as
 // soon as this module loads so failures during Providers/appService bootstrap
@@ -20,20 +21,10 @@ if (typeof window !== 'undefined' && window.__MOKE_EMBEDDED && window.__MOKE_DEB
 
 function initialPanelVisibility(): boolean {
   if (typeof window === 'undefined' || !window.__MOKE_EMBEDDED) return false;
-  if (typeof window.__MOKE_DEBUG_PANEL === 'boolean') return window.__MOKE_DEBUG_PANEL;
-  try {
-    const value: unknown = JSON.parse(
-      window.localStorage.getItem('moke-developer-storage') || '{}',
-    );
-    const state = value && typeof value === 'object' ? (value as { state?: unknown }).state : null;
-    return !!(
-      state &&
-      typeof state === 'object' &&
-      (state as { showDebugPanel?: unknown }).showDebugPanel
-    );
-  } catch {
-    return false;
-  }
+  // Never let a stale launch flag hide a switch that is durably enabled in
+  // the shared mobile WebView storage. The URL remains authoritative for
+  // enabling the panel in separate desktop reader windows.
+  return window.__MOKE_DEBUG_PANEL === true || readPersistedMokeDebugPanel();
 }
 
 export default function DebugLogIntegration() {
