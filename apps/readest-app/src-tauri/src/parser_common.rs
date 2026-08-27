@@ -17,12 +17,17 @@
 // turn it back into a `Uint8Array` before persisting through the existing
 // `Books/<hash>/cover.<ext>` path.
 
-use image::{codecs::jpeg::JpegEncoder, imageops::FilterType, GenericImageView};
+use image::{codecs::jpeg::JpegEncoder, imageops::FilterType, GenericImageView, ImageReader};
 use md5::{Digest, Md5};
 use serde::Serialize;
 use std::fs::File;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
+
+use crate::parser_limits::{
+    image_decoder_limits, is_resource_limit_error, resource_limit_error, validate_image_dimensions,
+    validate_image_input_size,
+};
 
 /// Cover thumbnail target. Sized for the library grid (~250-300px @2x)
 /// and the reader-sidebar / detail-view rows (which are smaller still).
@@ -50,23 +55,60 @@ pub struct RawCoverImage {
     pub mime: String,
 }
 
+/// Decode untrusted image bytes under the shared strict dimension and bounded
+/// allocation policy. Dimensions are probed first and validated again after
+/// decode, so a decoder cannot make a large allocation from a forged header
+/// before Readest notices it.
+pub fn decode_image_with_limits(bytes: &[u8]) -> Result<image::DynamicImage, String> {
+    validate_image_input_size(bytes.len())?;
+
+    let make_reader = || {
+        ImageReader::new(Cursor::new(bytes))
+            .with_guessed_format()
+            .map_err(|error| format!("decode failed: {error}"))
+    };
+
+    let mut dimensions_reader = make_reader()?;
+    dimensions_reader.limits(image_decoder_limits());
+    let (width, height) = dimensions_reader.into_dimensions().map_err(|error| {
+        if matches!(&error, image::ImageError::Limits(_)) {
+            resource_limit_error()
+        } else {
+            format!("decode failed: {error}")
+        }
+    })?;
+    validate_image_dimensions(width, height)?;
+
+    let mut decode_reader = make_reader()?;
+    decode_reader.limits(image_decoder_limits());
+    let image = decode_reader.decode().map_err(|error| {
+        if matches!(&error, image::ImageError::Limits(_)) {
+            resource_limit_error()
+        } else {
+            format!("decode failed: {error}")
+        }
+    })?;
+    let (decoded_width, decoded_height) = image.dimensions();
+    validate_image_dimensions(decoded_width, decoded_height)?;
+    Ok(image)
+}
+
 /// Decode `bytes`, and if the long edge exceeds [`COVER_MAX_LONG_EDGE`],
 /// resize ([`COVER_RESIZE_FILTER`], aspect ratio preserved) and re-encode
 /// as JPEG at [`COVER_JPEG_QUALITY`].
 ///
-/// On any decode/encode failure we fall back to the original bytes + the
-/// caller-provided MIME so a malformed (but viewable) cover still makes it
-/// to disk. `hint_mime` is informative only — `image::load_from_memory`
-/// sniffs the actual format from the magic bytes, so misclaimed MIMEs in
-/// the source container don't trip us up.
-pub fn maybe_resize_cover(bytes: Vec<u8>, hint_mime: &str) -> (Vec<u8>, String) {
-    let img = match image::load_from_memory(&bytes) {
-        Ok(i) => i,
-        Err(_) => return (bytes, hint_mime.to_string()),
+/// Ordinary format/decode errors retain the previous best-effort behavior and
+/// return the original bytes. Resource-limit errors are different: propagating
+/// them prevents a malicious cover from reaching another, unbounded decoder.
+pub fn maybe_resize_cover(bytes: Vec<u8>, hint_mime: &str) -> Result<(Vec<u8>, String), String> {
+    let img = match decode_image_with_limits(&bytes) {
+        Ok(image) => image,
+        Err(error) if is_resource_limit_error(&error) => return Err(error),
+        Err(_) => return Ok((bytes, hint_mime.to_string())),
     };
     let (w, h) = img.dimensions();
     if w.max(h) <= COVER_MAX_LONG_EDGE {
-        return (bytes, hint_mime.to_string());
+        return Ok((bytes, hint_mime.to_string()));
     }
     let resized = img.resize(
         COVER_MAX_LONG_EDGE,
@@ -87,10 +129,10 @@ pub fn maybe_resize_cover(bytes: Vec<u8>, hint_mime: &str) -> (Vec<u8>, String) 
             )
             .is_err()
         {
-            return (bytes, hint_mime.to_string());
+            return Ok((bytes, hint_mime.to_string()));
         }
     }
-    (out, "image/jpeg".to_string())
+    Ok((out, "image/jpeg".to_string()))
 }
 
 /// Mirror of `utils/md5.ts::partialMD5`:

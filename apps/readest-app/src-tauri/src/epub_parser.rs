@@ -54,6 +54,10 @@ use zip::ZipArchive;
 // via `parser_common`, so a single tweak (e.g. raising the thumbnail target)
 // applies to every native importer.
 use crate::parser_common::{compute_partial_md5, maybe_resize_cover, RawCoverImage};
+use crate::parser_limits::{
+    is_resource_limit_error, limits, resource_limit_error, validate_zip_archive,
+    validate_zip_entry_metadata, validate_zip_file,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,13 +100,15 @@ pub async fn parse_epub_metadata(file_path: String) -> Result<ParsedEpubMetadata
 fn parse_epub_metadata_sync(file_path: &str) -> Result<ParsedEpubMetadata, String> {
     let path = Path::new(file_path);
     if !path.exists() {
-        return Err(format!("file not found: {file_path}"));
+        return Err("The book file could not be found.".to_string());
     }
 
     let partial_md5 = compute_partial_md5(path).map_err(|e| format!("partial_md5 failed: {e}"))?;
+    validate_zip_file(path)?;
 
     let file = File::open(path).map_err(|e| format!("open failed: {e}"))?;
     let mut zip = ZipArchive::new(file).map_err(|e| format!("zip open failed: {e}"))?;
+    validate_zip_archive(&mut zip)?;
 
     let opf_path = read_rootfile_path(&mut zip).map_err(|e| format!("container.xml: {e}"))?;
 
@@ -127,14 +133,17 @@ fn parse_epub_metadata_sync(file_path: &str) -> Result<ParsedEpubMetadata, Strin
     // the library grid sharp the moment import finishes. spawn_blocking
     // above already gives the 4 concurrent JS workers true parallelism.
     let (cover, cover_mime) = match cover_zip_path.as_deref() {
-        Some(cover_path) => match read_zip_entry(&mut zip, cover_path) {
-            Ok(bytes) => {
-                let mime_hint = guess_image_mime(cover_path);
-                let (out_bytes, out_mime) = maybe_resize_cover(bytes, mime_hint);
-                (Some(out_bytes), Some(out_mime))
+        Some(cover_path) => {
+            match read_zip_entry_bounded(&mut zip, cover_path, limits().image.max_input_bytes) {
+                Ok(bytes) => {
+                    let mime_hint = guess_image_mime(cover_path);
+                    let (out_bytes, out_mime) = maybe_resize_cover(bytes, mime_hint)?;
+                    (Some(out_bytes), Some(out_mime))
+                }
+                Err(error) if is_resource_limit_error(&error) => return Err(error),
+                Err(_) => (None, None),
             }
-            Err(_) => (None, None),
-        },
+        }
         None => (None, None),
     };
 
@@ -163,10 +172,12 @@ pub async fn extract_epub_cover_full(file_path: String) -> Result<RawCoverImage,
 fn extract_epub_cover_full_sync(file_path: &str) -> Result<RawCoverImage, String> {
     let path = Path::new(file_path);
     if !path.exists() {
-        return Err(format!("file not found: {file_path}"));
+        return Err("The book file could not be found.".to_string());
     }
+    validate_zip_file(path)?;
     let file = File::open(path).map_err(|e| format!("open failed: {e}"))?;
     let mut zip = ZipArchive::new(file).map_err(|e| format!("zip open failed: {e}"))?;
+    validate_zip_archive(&mut zip)?;
     let opf_path = read_rootfile_path(&mut zip).map_err(|e| format!("container.xml: {e}"))?;
     let opf_bytes =
         read_zip_entry(&mut zip, &opf_path).map_err(|e| format!("read opf {opf_path}: {e}"))?;
@@ -176,7 +187,7 @@ fn extract_epub_cover_full_sync(file_path: &str) -> Result<RawCoverImage, String
         resolve_cover_path(&cover_inputs.manifest, &cover_inputs.cover_id, &opf_path)
             .or_else(|| find_undeclared_cover_entry(&zip))
             .ok_or_else(|| "no cover image in epub".to_string())?;
-    let bytes = read_zip_entry(&mut zip, &cover_zip_path)
+    let bytes = read_zip_entry_bounded(&mut zip, &cover_zip_path, limits().image.max_input_bytes)
         .map_err(|e| format!("read cover {cover_zip_path}: {e}"))?;
     let mime = guess_image_mime(&cover_zip_path).to_string();
     Ok(RawCoverImage { bytes, mime })
@@ -261,13 +272,15 @@ pub async fn parse_epub_full(file_path: String) -> Result<ParsedEpubFull, String
 fn parse_epub_full_sync(file_path: &str) -> Result<ParsedEpubFull, String> {
     let path = Path::new(file_path);
     if !path.exists() {
-        return Err(format!("file not found: {file_path}"));
+        return Err("The book file could not be found.".to_string());
     }
 
     let partial_md5 = compute_partial_md5(path).map_err(|e| format!("partial_md5 failed: {e}"))?;
+    validate_zip_file(path)?;
 
     let file = File::open(path).map_err(|e| format!("open failed: {e}"))?;
     let mut zip = ZipArchive::new(file).map_err(|e| format!("zip open failed: {e}"))?;
+    validate_zip_archive(&mut zip)?;
 
     let opf_path = read_rootfile_path(&mut zip).map_err(|e| format!("container.xml: {e}"))?;
 
@@ -289,13 +302,23 @@ fn parse_epub_full_sync(file_path: &str) -> Result<ParsedEpubFull, String> {
 
     // Soft-fail on read errors: a missing nav/ncx doc isn't fatal; foliate-js
     // will fall back to NCX or to an empty TOC.
-    let nav_bytes = nav_path
-        .as_deref()
-        .and_then(|p| read_zip_entry(&mut zip, p).ok());
+    let nav_bytes = match nav_path.as_deref() {
+        Some(path) => match read_zip_entry(&mut zip, path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if is_resource_limit_error(&error) => return Err(error),
+            Err(_) => None,
+        },
+        None => None,
+    };
 
-    let ncx_bytes = ncx_path
-        .as_deref()
-        .and_then(|p| read_zip_entry(&mut zip, p).ok());
+    let ncx_bytes = match ncx_path.as_deref() {
+        Some(path) => match read_zip_entry(&mut zip, path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if is_resource_limit_error(&error) => return Err(error),
+            Err(_) => None,
+        },
+        None => None,
+    };
 
     // Build the size map from the central directory. We key by zip path
     // (OPF-relative href, normalized via resolve_relative on the JS side).
@@ -487,32 +510,62 @@ fn locate_toc_sources(opf_bytes: &[u8]) -> Result<LocatedTocSources, String> {
 // ---------------------------------------------------------------------------
 
 fn read_zip_entry<R: Read + Seek>(zip: &mut ZipArchive<R>, path: &str) -> Result<Vec<u8>, String> {
+    read_zip_entry_bounded(zip, path, limits().zip.max_entry_uncompressed_bytes)
+}
+
+fn read_zip_entry_bounded<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    path: &str,
+    maximum: u64,
+) -> Result<Vec<u8>, String> {
     // Two-pass lookup, mirroring what epub-rs does (archive.rs) and what
     // foliate-js does on the JS side: many EPUBs declare manifest hrefs that
     // are percent-encoded (e.g. "Text/My%20Chapter.xhtml" or CJK %E4%BB%96)
     // while the zip itself stores the raw decoded bytes — or vice versa.
-    // We try the literal path first (the common case), then fall back to a
-    // percent-decoded variant if it differs.
-    if let Ok(bytes) = read_by_name(zip, path) {
-        return Ok(bytes);
-    }
+    let first_error = match read_by_name(zip, path, maximum) {
+        Ok(bytes) => return Ok(bytes),
+        Err(error) if is_resource_limit_error(&error) => return Err(error),
+        Err(error) => error,
+    };
     let decoded = percent_decode(path.as_bytes()).decode_utf8_lossy();
     if decoded.as_ref() != path {
-        if let Ok(bytes) = read_by_name(zip, decoded.as_ref()) {
-            return Ok(bytes);
+        match read_by_name(zip, decoded.as_ref(), maximum) {
+            Ok(bytes) => return Ok(bytes),
+            Err(error) if is_resource_limit_error(&error) => return Err(error),
+            Err(_) => {}
         }
     }
-    Err(format!("entry {path}: not found"))
+    Err(first_error)
 }
 
-fn read_by_name<R: Read + Seek>(zip: &mut ZipArchive<R>, name: &str) -> Result<Vec<u8>, String> {
+fn read_by_name<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
+    name: &str,
+    maximum: u64,
+) -> Result<Vec<u8>, String> {
     let mut entry = zip
         .by_name(name)
         .map_err(|e| format!("entry {name}: {e}"))?;
-    let mut buf = Vec::with_capacity(entry.size() as usize);
-    entry
+    let declared_size = entry.size();
+    validate_zip_entry_metadata(entry.compressed_size(), declared_size)?;
+    if declared_size > maximum {
+        return Err(resource_limit_error());
+    }
+
+    // Do not trust the central-directory size for allocation. Stream at most
+    // max+1 bytes, then compare the actual result with both the configured cap
+    // and the declaration after inflation.
+    let mut buf = Vec::new();
+    (&mut entry)
+        .take(maximum.saturating_add(1))
         .read_to_end(&mut buf)
-        .map_err(|e| format!("read {name}: {e}"))?;
+        .map_err(|e| format!("read entry failed: {e}"))?;
+    if buf.len() as u64 > maximum {
+        return Err(resource_limit_error());
+    }
+    if buf.len() as u64 != declared_size {
+        return Err("The book archive is corrupted.".to_string());
+    }
     Ok(buf)
 }
 
@@ -1198,6 +1251,15 @@ mod tests {
     }
 
     #[test]
+    fn normal_epub_fixture_remains_accepted() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../src/__tests__/fixtures/data/sample-alice.epub");
+        let parsed = parse_epub_full_sync(path.to_str().unwrap()).expect("normal EPUB parses");
+        assert!(!parsed.opf_bytes.is_empty());
+        assert!(!parsed.sizes.is_empty());
+    }
+
+    #[test]
     fn partial_md5_short_file_matches_js_reference() {
         // For a tiny 11-byte file the JS reference behaves as follows:
         //   i = -1: rawShift = 1024 << -2 -> 1024 << 30 (JS masks operand
@@ -1239,7 +1301,7 @@ mod tests {
         // 256x256 < 512: no decode/re-encode, byte-identical, MIME passthrough.
         let png = make_test_png(256, 256);
         let original = png.clone();
-        let (out, mime) = maybe_resize_cover(png, "image/png");
+        let (out, mime) = maybe_resize_cover(png, "image/png").unwrap();
         assert_eq!(out, original, "small images must be returned verbatim");
         assert_eq!(mime, "image/png");
     }
@@ -1249,7 +1311,7 @@ mod tests {
         // 512x512 == threshold: still passes through.
         let png = make_test_png(512, 512);
         let original = png.clone();
-        let (out, mime) = maybe_resize_cover(png, "image/jpeg");
+        let (out, mime) = maybe_resize_cover(png, "image/jpeg").unwrap();
         assert_eq!(out, original);
         assert_eq!(mime, "image/jpeg");
     }
@@ -1259,7 +1321,7 @@ mod tests {
         // 1500x1000: long edge 1500 -> 512, short edge proportional.
         // After encoding we re-decode to assert the dimensions and MIME.
         let png = make_test_png(1500, 1000);
-        let (out, mime) = maybe_resize_cover(png, "image/png");
+        let (out, mime) = maybe_resize_cover(png, "image/png").unwrap();
         assert_eq!(mime, "image/jpeg");
         let decoded = image::load_from_memory(&out).expect("re-decodes");
         let (w, h) = decoded.dimensions();
@@ -1283,7 +1345,7 @@ mod tests {
     fn maybe_resize_cover_preserves_aspect_for_tall_image() {
         // 800x2000 (aspect 0.4): tall edge -> 512, width ~205.
         let png = make_test_png(800, 2000);
-        let (out, mime) = maybe_resize_cover(png, "image/png");
+        let (out, mime) = maybe_resize_cover(png, "image/png").unwrap();
         assert_eq!(mime, "image/jpeg");
         let (w, h) = image::load_from_memory(&out).unwrap().dimensions();
         assert_eq!(h, COVER_MAX_LONG_EDGE);
@@ -1297,9 +1359,17 @@ mod tests {
         // Garbage bytes are not a valid image; we should fall back to the
         // original blob + the caller-supplied MIME rather than panic.
         let junk = b"not an image".to_vec();
-        let (out, mime) = maybe_resize_cover(junk.clone(), "image/png");
+        let (out, mime) = maybe_resize_cover(junk.clone(), "image/png").unwrap();
         assert_eq!(out, junk);
         assert_eq!(mime, "image/png");
+    }
+
+    #[test]
+    fn maybe_resize_cover_rejects_oversized_dimensions_before_decode() {
+        // A very wide but tiny-on-disk PNG exercises the decoder dimension
+        // gate without allocating a large fixture in the test itself.
+        let png = make_test_png(limits().image.max_width + 1, 1);
+        assert!(maybe_resize_cover(png, "image/png").is_err());
     }
 
     #[test]

@@ -18,6 +18,10 @@ export class ImportError extends Error {
 const IMPORT_ERROR_MAP: [string, string][] = [
   ['No chapters detected', _('No chapters detected')],
   ['Failed to parse EPUB', _('Failed to parse the EPUB file')],
+  [
+    "This book exceeds Readest's safe processing limits",
+    _("This book exceeds Readest's safe processing limits. Try a smaller or repaired copy."),
+  ],
   ['Unsupported format', _('This book format is not supported')],
   ['Failed to open file', _('Failed to open the book file')],
   ['Invalid or empty book file', _('The book file is empty')],
