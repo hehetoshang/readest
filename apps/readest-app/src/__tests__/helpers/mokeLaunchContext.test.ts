@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { bootstrapMokeLaunchContext, mokeProgressStorageKey } from '@/helpers/mokeLaunchContext';
+import {
+  bootstrapMokeLaunchContext,
+  mokeProgressStorageKey,
+  readPersistedMokeDebugPanel,
+} from '@/helpers/mokeLaunchContext';
 
 describe('bootstrapMokeLaunchContext', () => {
   beforeEach(() => {
@@ -46,6 +50,44 @@ describe('bootstrapMokeLaunchContext', () => {
     bootstrapMokeLaunchContext();
 
     expect(window.__MOKE_DEBUG_PANEL).toBe(true);
+  });
+
+  it('keeps the debug panel enabled when native navigation carries a stale zero flag', () => {
+    localStorage.setItem(
+      'moke-developer-storage',
+      JSON.stringify({
+        state: { unlocked: true, enabled: true, showDebugPanel: true },
+        version: 0,
+      }),
+    );
+    window.history.replaceState({}, '', '/reader?moke=1&mokeDebug=0&mokeBookId=42');
+
+    bootstrapMokeLaunchContext();
+
+    expect(window.__MOKE_DEBUG_PANEL).toBe(true);
+  });
+
+  it('keeps the panel hidden when both launch and persisted settings are disabled', () => {
+    localStorage.setItem(
+      'moke-developer-storage',
+      JSON.stringify({ state: { showDebugPanel: false }, version: 0 }),
+    );
+    window.history.replaceState({}, '', '/reader?moke=1&mokeDebug=0&mokeBookId=42');
+
+    bootstrapMokeLaunchContext();
+
+    expect(window.__MOKE_DEBUG_PANEL).toBe(false);
+  });
+
+  it('reads the persisted switch defensively', () => {
+    localStorage.setItem(
+      'moke-developer-storage',
+      JSON.stringify({ state: { showDebugPanel: true }, version: 0 }),
+    );
+    expect(readPersistedMokeDebugPanel()).toBe(true);
+
+    localStorage.setItem('moke-developer-storage', '{broken');
+    expect(readPersistedMokeDebugPanel()).toBe(false);
   });
 
   it('keeps an explicit annotation-locate target even when local progress is newer', () => {

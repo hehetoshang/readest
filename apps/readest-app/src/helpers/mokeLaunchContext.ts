@@ -1,4 +1,21 @@
 const MOKE_PROGRESS_STORAGE_PREFIX = 'moke:reading-progress:';
+const MOKE_DEVELOPER_STORAGE_KEY = 'moke-developer-storage';
+
+export function readPersistedMokeDebugPanel(
+  storage: Pick<Storage, 'getItem'> = window.localStorage,
+): boolean {
+  try {
+    const value: unknown = JSON.parse(storage.getItem(MOKE_DEVELOPER_STORAGE_KEY) || '{}');
+    const state = value && typeof value === 'object' ? (value as { state?: unknown }).state : null;
+    return !!(
+      state &&
+      typeof state === 'object' &&
+      (state as { showDebugPanel?: unknown }).showDebugPanel === true
+    );
+  } catch {
+    return false;
+  }
+}
 
 export function mokeProgressStorageKey(serverUrl: string, mokeBookId: string): string {
   return `${MOKE_PROGRESS_STORAGE_PREFIX}${encodeURIComponent(serverUrl)}:${encodeURIComponent(mokeBookId)}`;
@@ -56,7 +73,26 @@ export function bootstrapMokeLaunchContext(): void {
   const mokeBookId = params.get('mokeBookId') || '';
   window.__MOKE_EMBEDDED = true;
   window.__MOKE_EINK = params.get('mokeEink') === '1';
-  window.__MOKE_DEBUG_PANEL = params.get('mokeDebug') === '1';
+  // Moke and the embedded reader share the same WebView storage on mobile.
+  // The native full-document navigation can race Zustand hydration and carry
+  // a stale mokeDebug=0 even though the persisted switch is already enabled.
+  // This function is serialized into an inline bootstrap script, so keep the
+  // storage read self-contained instead of calling the exported helper above.
+  let persistedDebugPanel = false;
+  try {
+    const value: unknown = JSON.parse(
+      window.localStorage.getItem('moke-developer-storage') || '{}',
+    );
+    const state = value && typeof value === 'object' ? (value as { state?: unknown }).state : null;
+    persistedDebugPanel = !!(
+      state &&
+      typeof state === 'object' &&
+      (state as { showDebugPanel?: unknown }).showDebugPanel === true
+    );
+  } catch {
+    persistedDebugPanel = false;
+  }
+  window.__MOKE_DEBUG_PANEL = params.get('mokeDebug') === '1' || persistedDebugPanel;
   window.__MOKE_BOOK_ID = mokeBookId || null;
   window.__MOKE_SERVER_URL = serverUrl || null;
   let remoteProgress: Record<string, unknown> | null = null;
