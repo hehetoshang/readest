@@ -136,7 +136,9 @@ const shouldInjectRuntimeConfig = process.env['NEXT_PUBLIC_APP_PLATFORM'] === 'w
 
 // Mobile Moke opens the embedded reader in its only WebView. Bootstrap the
 // host context before React starts so the reader handles the file, e-ink mode,
-// and progress bridge exactly like its desktop reader window.
+// and progress bridge exactly like its desktop reader window. Render this as a
+// native script element: next/script serializes inline beforeInteractive code
+// into __next_s, which can be drained after client modules start on Android.
 const mokeLaunchContextScript = `(${bootstrapMokeLaunchContext.toString()})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -154,9 +156,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {shouldInjectDevHmrPatch ? (
           <script dangerouslySetInnerHTML={{ __html: devHmrPatchScript }} />
         ) : null}
-        <Script id='moke-launch-context' strategy='beforeInteractive'>
-          {mokeLaunchContextScript}
-        </Script>
+        <script
+          id='moke-launch-context'
+          dangerouslySetInnerHTML={{ __html: mokeLaunchContextScript }}
+        />
       </head>
       <body>
         <ViewTransitions>
