@@ -236,6 +236,9 @@ export const useCustomOPDSStore = create<OPDSStoreState>((set, get) => ({
           ...catalog,
           username: catalog.username ?? old.username,
           password: catalog.password ?? old.password,
+          // Certificate exemptions are intentionally device-local. A remote
+          // catalog update must not grant or revoke this device's trust choice.
+          allowInvalidCertificate: old.allowInvalidCertificate,
           // Preserve the previously-applied cipher fingerprint when
           // the orchestrator didn't attach a fresh one (e.g., row
           // carried no cipher fields, or every decrypt failed).

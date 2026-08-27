@@ -3,6 +3,7 @@ import { replace as expandURITemplate, getVariables } from 'foliate-js/uri-templ
 import { OPDSBaseLink, OPDSCatalog } from '@/types/opds';
 import { EXTS } from '@/libs/document';
 import { fetchWithAuth } from './opdsReq';
+import type { InvalidCertificatePolicy } from '@/services/transportSecurity';
 
 export const groupByArray = <T, K>(arr: T[] | undefined, f: (el: T) => K | K[]): Map<K, T[]> => {
   const map = new Map<K, T[]>();
@@ -248,6 +249,7 @@ export const validateOPDSURL = async (
   password?: string,
   useProxy = false,
   customHeaders: Record<string, string> = {},
+  security: InvalidCertificatePolicy = {},
 ): Promise<ValidationResult> => {
   try {
     const controller = new AbortController();
@@ -261,6 +263,7 @@ export const validateOPDSURL = async (
         signal: controller.signal,
       },
       customHeaders,
+      security,
     );
     clearTimeout(timeout);
 

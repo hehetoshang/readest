@@ -148,6 +148,21 @@ pub struct ProgressPayload {
     transfer_speed: u64,
 }
 
+fn same_origin(left: &reqwest::Url, right: &reqwest::Url) -> bool {
+    left.scheme() == right.scheme()
+        && left.host_str() == right.host_str()
+        && left.port_or_known_default() == right.port_or_known_default()
+}
+
+fn headers_require_origin_lock(headers: &HashMap<String, String>) -> bool {
+    headers.keys().any(|name| {
+        !matches!(
+            name.to_ascii_lowercase().as_str(),
+            "accept" | "accept-encoding" | "accept-language" | "range" | "user-agent"
+        )
+    })
+}
+
 #[command]
 #[allow(clippy::too_many_arguments)] // Tauri command surface mirrors the JS caller's options.
 pub async fn download_file(
@@ -168,9 +183,30 @@ pub async fn download_file(
 
     const PART_SIZE: u64 = 1024 * 1024;
 
+    let allow_invalid_certificate = skip_ssl_verification.unwrap_or(false);
+    let redirect_origin = reqwest::Url::parse(url).ok();
+    // If a request carries credentials/custom headers, or uses an exact-origin
+    // certificate exemption, stop before a cross-origin redirect. Returning the
+    // 3xx to the caller is safer than replaying secrets or extending the TLS
+    // exemption to the redirected server.
+    let lock_redirect_origin = allow_invalid_certificate || headers_require_origin_lock(&headers);
     let client = reqwest::ClientBuilder::new()
-        .danger_accept_invalid_certs(skip_ssl_verification.unwrap_or(false))
-        .danger_accept_invalid_hostnames(skip_ssl_verification.unwrap_or(false))
+        .danger_accept_invalid_certs(allow_invalid_certificate)
+        // Invalid/self-signed certificate authorization never disables hostname checks.
+        .danger_accept_invalid_hostnames(false)
+        .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+            if attempt.previous().len() >= 5 {
+                return attempt.error(std::io::Error::other("too many redirects"));
+            }
+            if lock_redirect_origin
+                && redirect_origin
+                    .as_ref()
+                    .is_some_and(|origin| !same_origin(origin, attempt.url()))
+            {
+                return attempt.stop();
+            }
+            attempt.follow()
+        }))
         .build()?;
     let force_single = single_threaded.unwrap_or(false);
 
@@ -387,7 +423,43 @@ fn file_to_body(channel: Channel<ProgressPayload>, file: File, file_len: u64) ->
 
 #[cfg(test)]
 mod tests {
-    use super::{has_disallowed_components, is_within_app_storage};
+    use super::{
+        has_disallowed_components, headers_require_origin_lock, is_within_app_storage, same_origin,
+    };
+    use std::collections::HashMap;
+
+    #[test]
+    fn redirect_origin_comparison_includes_scheme_host_and_effective_port() {
+        let base = reqwest::Url::parse("https://books.example.com/file").unwrap();
+        assert!(same_origin(
+            &base,
+            &reqwest::Url::parse("https://books.example.com:443/next").unwrap()
+        ));
+        assert!(!same_origin(
+            &base,
+            &reqwest::Url::parse("https://cdn.example.com/file").unwrap()
+        ));
+        assert!(!same_origin(
+            &base,
+            &reqwest::Url::parse("http://books.example.com/file").unwrap()
+        ));
+    }
+
+    #[test]
+    fn credential_and_custom_headers_lock_download_redirects_to_the_origin() {
+        let safe = HashMap::from([
+            ("User-Agent".to_string(), "Readest".to_string()),
+            ("Accept".to_string(), "*/*".to_string()),
+        ]);
+        assert!(!headers_require_origin_lock(&safe));
+
+        let authorization =
+            HashMap::from([("Authorization".to_string(), "Bearer secret".to_string())]);
+        assert!(headers_require_origin_lock(&authorization));
+
+        let custom = HashMap::from([("X-Api-Key".to_string(), "secret".to_string())]);
+        assert!(headers_require_origin_lock(&custom));
+    }
 
     #[test]
     fn app_storage_fallback_accepts_app_paths() {

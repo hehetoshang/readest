@@ -32,6 +32,12 @@ export interface OPDSCatalog {
   customHeaders?: Record<string, string>;
   autoDownload?: boolean;
   /**
+   * Device-local, explicit authorization for an invalid/self-signed
+   * certificate on this catalog's exact HTTPS origin. Hostname validation is
+   * never disabled and the grant is intentionally not replica-synced.
+   */
+  allowInvalidCertificate?: boolean;
+  /**
    * Stable cross-device identifier derived from the URL. Used as the
    * replica_id so two devices that import the same OPDS URL converge to a
    * single row instead of duplicating. Absent on legacy entries imported

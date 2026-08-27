@@ -53,6 +53,7 @@ const BOOKS = [
 beforeEach(() => {
   vi.clearAllMocks();
   window.__MOKE_SERVER_URL = 'http://192.168.1.5:8080';
+  window.__MOKE_ALLOW_INVALID_CERTIFICATE = false;
   invokeMock.mockReset();
   invokeMock.mockImplementation(async (cmd: string) => {
     if (cmd === 'moke_list_downloaded_books') return BOOKS;
@@ -70,6 +71,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   window.__MOKE_SERVER_URL = null;
+  window.__MOKE_ALLOW_INVALID_CERTIFICATE = false;
 });
 
 // ---------------------------------------------------------------------------

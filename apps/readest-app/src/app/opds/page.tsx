@@ -60,6 +60,10 @@ import { closeOPDSBrowser, stashOPDSReturnTarget } from './utils/opdsClose';
 import { findExistingBookForPublication } from './utils/findExistingBook';
 import Dialog from '@/components/Dialog';
 import { uniqueId } from '@/utils/misc';
+import {
+  allowsInvalidCertificate,
+  type InvalidCertificatePolicy,
+} from '@/services/transportSecurity';
 
 type ViewMode = 'feed' | 'publication' | 'search' | 'loading' | 'error';
 
@@ -130,6 +134,7 @@ export default function BrowserPage() {
   const usernameRef = useRef<string | null | undefined>(undefined);
   const passwordRef = useRef<string | null | undefined>(undefined);
   const customHeadersRef = useRef<Record<string, string>>({});
+  const transportSecurityRef = useRef<InvalidCertificatePolicy>({});
   const startURLRef = useRef<string | null | undefined>(undefined);
   const loadingOPDSRef = useRef(false);
   const historyIndexRef = useRef(-1);
@@ -215,7 +220,15 @@ export default function BrowserPage() {
         const username = usernameRef.current || '';
         const password = passwordRef.current || '';
         const customHeaders = customHeadersRef.current;
-        const res = await fetchWithAuth(url, username, password, useProxy, {}, customHeaders);
+        const res = await fetchWithAuth(
+          url,
+          username,
+          password,
+          useProxy,
+          {},
+          customHeaders,
+          transportSecurityRef.current,
+        );
 
         if (!res.ok) {
           if (isSearch && res.status === 404) {
@@ -390,6 +403,10 @@ export default function BrowserPage() {
         passwordRef.current = null;
       }
       customHeadersRef.current = normalizeCustomHeaders(catalog?.customHeaders);
+      transportSecurityRef.current = {
+        serverUrl: catalog?.url,
+        allowInvalidCertificate: catalog?.allowInvalidCertificate,
+      };
       if (libraryLoaded) {
         lastLoadedKeyRef.current = loadKey;
         loadOPDS(url);
@@ -493,7 +510,15 @@ export default function BrowserPage() {
         const username = usernameRef.current || '';
         const password = passwordRef.current || '';
         const customHeaders = customHeadersRef.current;
-        const res = await fetchWithAuth(url, username, password, useProxy, {}, customHeaders);
+        const res = await fetchWithAuth(
+          url,
+          username,
+          password,
+          useProxy,
+          {},
+          customHeaders,
+          transportSecurityRef.current,
+        );
         if (!res.ok) return null;
         const text = await res.text();
         return parsePublicationDocument(text, res.url);
@@ -582,7 +607,14 @@ export default function BrowserPage() {
             ...(!useProxy ? customHeaders : {}),
           };
           if (username || password) {
-            const authHeader = await probeAuth(url, username, password, useProxy, customHeaders);
+            const authHeader = await probeAuth(
+              url,
+              username,
+              password,
+              useProxy,
+              customHeaders,
+              transportSecurityRef.current,
+            );
             if (authHeader) {
               if (!useProxy) {
                 headers['Authorization'] = authHeader;
@@ -605,7 +637,7 @@ export default function BrowserPage() {
             url: downloadUrl,
             headers,
             singleThreaded: true,
-            skipSslVerification: true,
+            skipSslVerification: allowsInvalidCertificate(url, transportSecurityRef.current),
             onProgress,
           });
           const probedFilename = await probeFilename(responseHeaders);
@@ -639,6 +671,7 @@ export default function BrowserPage() {
                   username,
                   password,
                   customHeaders,
+                  security: transportSecurityRef.current,
                 });
               } catch (coverError) {
                 console.warn('OPDS: failed to apply the feed cover:', coverError);
@@ -727,7 +760,14 @@ export default function BrowserPage() {
           ...(!useProxy ? customHeaders : {}),
         };
         if (username || password) {
-          const authHeader = await probeAuth(url, username, password, useProxy, customHeaders);
+          const authHeader = await probeAuth(
+            url,
+            username,
+            password,
+            useProxy,
+            customHeaders,
+            transportSecurityRef.current,
+          );
           if (authHeader) {
             if (!useProxy) {
               headers['Authorization'] = authHeader;
@@ -741,7 +781,7 @@ export default function BrowserPage() {
           cfp: '',
           url: downloadUrl,
           singleThreaded: true,
-          skipSslVerification: true,
+          skipSslVerification: allowsInvalidCertificate(url, transportSecurityRef.current),
           headers,
         });
         return await appService.getImageURL(cachedPath);

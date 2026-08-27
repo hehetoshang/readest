@@ -862,6 +862,7 @@ describe('opdsUtils', () => {
         true,
         expect.objectContaining({ signal: expect.anything() }),
         customHeaders,
+        {},
       );
     });
   });

@@ -11,6 +11,7 @@ describe('bootstrapMokeLaunchContext', () => {
     localStorage.clear();
     window.history.replaceState({}, '', '/reader?moke=1&mokeBookId=42');
     window.__MOKE_RESTORE_PROGRESS = null;
+    window.__MOKE_ALLOW_INVALID_CERTIFICATE = false;
   });
 
   afterEach(() => {
@@ -42,6 +43,24 @@ describe('bootstrapMokeLaunchContext', () => {
     bootstrapMokeLaunchContext();
 
     expect(window.__MOKE_RESTORE_PROGRESS).toMatchObject({ location: 'epubcfi(/6/8)' });
+  });
+
+  it('accepts the certificate grant only with an HTTPS Moke server URL', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/reader?moke=1&mokeServerUrl=https%3A%2F%2Fbooks.example.com&mokeAllowInvalidCertificate=1',
+    );
+    bootstrapMokeLaunchContext();
+    expect(window.__MOKE_ALLOW_INVALID_CERTIFICATE).toBe(true);
+
+    window.history.replaceState(
+      {},
+      '',
+      '/reader?moke=1&mokeServerUrl=http%3A%2F%2Fbooks.example.com&mokeAllowInvalidCertificate=1',
+    );
+    bootstrapMokeLaunchContext();
+    expect(window.__MOKE_ALLOW_INVALID_CERTIFICATE).toBe(false);
   });
 
   it('forwards the Moke debug panel launch flag', () => {

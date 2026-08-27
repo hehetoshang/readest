@@ -144,14 +144,7 @@ describe('OPDS auto-download orchestrator', () => {
     });
   });
 
-  it('downloads with skipSslVerification like the manual download path', async () => {
-    // The manual OPDS download (page.tsx handleDownload) passes
-    // skipSslVerification as a workaround for self-signed/private-CA OPDS
-    // servers (#2871): the native download_file validates TLS with rustls,
-    // which ignores the OS trust store, while the feed fetch and auth probe
-    // go through the http plugin with acceptInvalidCerts. Without the same
-    // flag here, auto-download dies in the TLS handshake on servers where
-    // manual download works (#4988).
+  it('uses strict TLS by default for auto-downloads', async () => {
     const catalogs: OPDSCatalog[] = [
       { id: 'cat-1', name: 'Shelf', url: 'https://shelf.example.com/opds', autoDownload: true },
     ];
@@ -168,6 +161,33 @@ describe('OPDS auto-download orchestrator', () => {
     await syncSubscribedCatalogs(catalogs, appService, []);
 
     expect(downloadFile).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(downloadFile).mock.calls[0]![0]).toMatchObject({
+      skipSslVerification: false,
+    });
+  });
+
+  it('applies an explicit invalid-certificate grant only to the catalog origin', async () => {
+    const catalogs: OPDSCatalog[] = [
+      {
+        id: 'cat-1',
+        name: 'Shelf',
+        url: 'https://shelf.example.com/opds',
+        autoDownload: true,
+        allowInvalidCertificate: true,
+      },
+    ];
+    vi.mocked(checkFeedForNewItems).mockResolvedValue([
+      {
+        entryId: 'urn:shelf:1',
+        title: 'Issue 1',
+        acquisitionHref: '/dl/1.epub',
+        mimeType: 'application/epub+zip',
+        baseURL: 'https://shelf.example.com/opds',
+      },
+    ]);
+
+    await syncSubscribedCatalogs(catalogs, appService, []);
+
     expect(vi.mocked(downloadFile).mock.calls[0]![0]).toMatchObject({
       skipSslVerification: true,
     });

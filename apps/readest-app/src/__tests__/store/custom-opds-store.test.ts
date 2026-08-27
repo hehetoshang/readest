@@ -145,6 +145,23 @@ describe('customOPDSStore', () => {
       expect(updated!.contentId).not.toBe(cat.contentId);
     });
 
+    test('can explicitly grant and revoke the device-local certificate exemption', () => {
+      const cat = useCustomOPDSStore.getState().addCatalog({
+        id: 'local-1',
+        name: 'Self-signed',
+        url: 'https://self-signed.example/opds',
+      });
+
+      expect(
+        useCustomOPDSStore.getState().updateCatalog(cat.id, { allowInvalidCertificate: true })
+          ?.allowInvalidCertificate,
+      ).toBe(true);
+      expect(
+        useCustomOPDSStore.getState().updateCatalog(cat.id, { allowInvalidCertificate: undefined })
+          ?.allowInvalidCertificate,
+      ).toBeUndefined();
+    });
+
     test('no-op on tombstoned entry', () => {
       const cat = useCustomOPDSStore.getState().addCatalog({
         id: 'l1',
@@ -180,6 +197,26 @@ describe('customOPDSStore', () => {
   });
 
   describe('applyRemoteCatalog', () => {
+    test('preserves the local certificate decision when remote metadata changes', () => {
+      const local = useCustomOPDSStore.getState().addCatalog({
+        id: 'local-1',
+        contentId: 'catalog-content-id',
+        name: 'Local',
+        url: 'https://self-signed.example/opds',
+        allowInvalidCertificate: true,
+      });
+
+      useCustomOPDSStore.getState().applyRemoteCatalog({
+        ...local,
+        name: 'Remote name',
+        allowInvalidCertificate: undefined,
+      });
+
+      const merged = useCustomOPDSStore.getState().findByContentId('catalog-content-id');
+      expect(merged?.name).toBe('Remote name');
+      expect(merged?.allowInvalidCertificate).toBe(true);
+    });
+
     test('inserts when the contentId is unknown locally', () => {
       const cat: OPDSCatalog = {
         id: 'remote-cid',

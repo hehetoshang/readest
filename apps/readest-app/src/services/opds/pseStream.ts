@@ -1,5 +1,3 @@
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
-import { isTauriAppPlatform } from '@/services/environment';
 import { READEST_OPDS_USER_AGENT } from '@/services/constants';
 import { useSettingsStore } from '@/store/settingsStore';
 import {
@@ -7,6 +5,7 @@ import {
   getProxiedURL,
   probeAuth,
   withOriginSuppressed,
+  fetchWithTransportSecurity,
 } from '@/app/opds/utils/opdsReq';
 import { normalizeCustomHeaders } from '@/utils/customHeaders';
 import type { BookFormat } from '@/types/book';
@@ -40,6 +39,10 @@ export const createPseStreamPageLoader = (data: PseStreamData) => {
   const username = catalog?.username || '';
   const password = catalog?.password || '';
   const customHeaders = normalizeCustomHeaders(catalog?.customHeaders);
+  const security = {
+    serverUrl: catalog?.url,
+    allowInvalidCertificate: catalog?.allowInvalidCertificate,
+  };
   let authHeaderPromise: Promise<string | null> | null = null;
 
   return async (pageIndex: number): Promise<Blob> => {
@@ -50,7 +53,7 @@ export const createPseStreamPageLoader = (data: PseStreamData) => {
     if (!authHeaderPromise) {
       authHeaderPromise =
         username || password
-          ? probeAuth(url, username, password, useProxy, customHeaders)
+          ? probeAuth(url, username, password, useProxy, customHeaders, security)
           : Promise.resolve(null);
     }
     const authHeader = await authHeaderPromise;
@@ -61,11 +64,7 @@ export const createPseStreamPageLoader = (data: PseStreamData) => {
       ...(!useProxy ? customHeaders : {}),
       ...(!useProxy && authHeader ? { Authorization: authHeader } : {}),
     });
-    const fetch = isTauriAppPlatform() ? tauriFetch : window.fetch;
-    const res = await fetch(fetchURL, {
-      headers,
-      danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
-    });
+    const res = await fetchWithTransportSecurity(fetchURL, { headers }, security);
     if (!res.ok) {
       throw new Error(`Failed to fetch page ${pageIndex}: ${res.statusText}`);
     }

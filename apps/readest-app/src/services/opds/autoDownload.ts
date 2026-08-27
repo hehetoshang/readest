@@ -20,6 +20,7 @@ import { isRetryEligible, DOWNLOAD_CONCURRENCY, MAX_RETRY_ATTEMPTS } from './typ
 import type { PendingItem, SyncResult, OPDSSubscriptionState, FailedEntry } from './types';
 import { runWithConcurrency } from '@/utils/concurrency';
 import { uniqueId } from '@/utils/misc';
+import { allowsInvalidCertificate } from '@/services/transportSecurity';
 
 /**
  * Download a single item and import it into the library.
@@ -34,6 +35,10 @@ async function downloadAndImport(
   const username = catalog.username ?? '';
   const password = catalog.password ?? '';
   const customHeaders = normalizeCustomHeaders(catalog.customHeaders);
+  const security = {
+    serverUrl: catalog.url,
+    allowInvalidCertificate: catalog.allowInvalidCertificate,
+  };
   const useProxy = needsProxy(url);
 
   let downloadUrl = useProxy ? getProxiedURL(url, '', true, customHeaders) : url;
@@ -44,7 +49,7 @@ async function downloadAndImport(
   };
 
   if (username || password) {
-    const authHeader = await probeAuth(url, username, password, useProxy, customHeaders);
+    const authHeader = await probeAuth(url, username, password, useProxy, customHeaders, security);
     if (authHeader) {
       if (!useProxy) {
         headers['Authorization'] = authHeader;
@@ -77,12 +82,7 @@ async function downloadAndImport(
     url: downloadUrl,
     headers,
     singleThreaded: true,
-    // Same self-signed/private-CA workaround as the manual download path
-    // (#2871): the native downloader's rustls validation ignores the OS
-    // trust store, so without this flag auto-download fails the TLS
-    // handshake on servers where feed browsing and manual download work
-    // (#4988).
-    skipSslVerification: true,
+    skipSslVerification: allowsInvalidCertificate(url, security),
   });
 
   const probedFilename = await probeFilename(responseHeaders);
@@ -111,6 +111,7 @@ async function downloadAndImport(
         username,
         password,
         customHeaders,
+        security,
       });
     } catch (error) {
       console.warn(`[OPDS] failed to apply the feed cover for "${item.title}":`, error);

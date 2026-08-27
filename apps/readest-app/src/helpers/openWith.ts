@@ -10,6 +10,7 @@ declare global {
     __MOKE_DEBUG_PANEL?: boolean;
     __MOKE_BOOK_ID?: string | null;
     __MOKE_SERVER_URL?: string | null;
+    __MOKE_ALLOW_INVALID_CERTIFICATE?: boolean;
     __MOKE_RESTORE_PROGRESS?: unknown;
   }
 }

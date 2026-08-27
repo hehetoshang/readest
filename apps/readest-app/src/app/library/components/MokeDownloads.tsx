@@ -43,8 +43,11 @@ async function fetchMokeRestoreProgress(
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        maxRedirections: 5,
-        danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
+        maxRedirections: 0,
+        danger: {
+          acceptInvalidCerts: window.__MOKE_ALLOW_INVALID_CERTIFICATE === true,
+          acceptInvalidHostnames: false,
+        },
       } as unknown as RequestInit,
     );
     const data = (await response.json()) as {
@@ -163,7 +166,12 @@ const MokeDownloads = ({ searchQuery }: { searchQuery: string }) => {
           mokeDebug: window.__MOKE_DEBUG_PANEL ? '1' : '0',
         });
         if (mokeBookId) params.set('mokeBookId', mokeBookId);
-        if (serverUrl) params.set('mokeServerUrl', serverUrl);
+        if (serverUrl) {
+          params.set('mokeServerUrl', serverUrl);
+          if (window.__MOKE_ALLOW_INVALID_CERTIFICATE) {
+            params.set('mokeAllowInvalidCertificate', '1');
+          }
+        }
         if (restoreProgress) params.set('mokeRestoreProgress', JSON.stringify(restoreProgress));
 
         try {

@@ -30,6 +30,7 @@ describe('mokeBridge server-side progress persistence', () => {
     window.__MOKE_EMBEDDED = true;
     window.__MOKE_SERVER_URL = SERVER_URL;
     window.__MOKE_BOOK_ID = '42';
+    window.__MOKE_ALLOW_INVALID_CERTIFICATE = false;
     window.__MOKE_RESTORE_PROGRESS = null;
     cancelMokeAnnotationNavigation(false);
     localStorage.clear();
@@ -41,6 +42,7 @@ describe('mokeBridge server-side progress persistence', () => {
     cancelMokeAnnotationNavigation(false);
     window.__MOKE_SERVER_URL = null;
     window.__MOKE_BOOK_ID = null;
+    window.__MOKE_ALLOW_INVALID_CERTIFICATE = false;
     window.__MOKE_RESTORE_PROGRESS = null;
   });
 
@@ -66,6 +68,21 @@ describe('mokeBridge server-side progress persistence', () => {
     expect(url).toBe(`${SERVER_URL}/api/book/42/progress`);
     expect((init as RequestInit).method).toBe('POST');
     expect((init as RequestInit).credentials).toBe('include');
+    expect(
+      (
+        init as RequestInit & {
+          maxRedirections: number;
+          danger: { acceptInvalidCerts: boolean; acceptInvalidHostnames: boolean };
+        }
+      ).maxRedirections,
+    ).toBe(0);
+    expect(
+      (
+        init as RequestInit & {
+          danger: { acceptInvalidCerts: boolean; acceptInvalidHostnames: boolean };
+        }
+      ).danger,
+    ).toEqual({ acceptInvalidCerts: false, acceptInvalidHostnames: false });
 
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.progress.schema).toBe('moke.readest.progress.v1');
@@ -80,6 +97,21 @@ describe('mokeBridge server-side progress persistence', () => {
     expect(body.progress.section_href).toBe('chapter-2.xhtml');
     expect(body.progress.chapter).toBe('第二章');
     expect(typeof body.progress.updated_at).toBe('string');
+  });
+
+  it('uses the exact server certificate grant without disabling hostname checks', async () => {
+    window.__MOKE_ALLOW_INVALID_CERTIFICATE = true;
+
+    void emitReaderEvent('page:changed', { book_id: 'abc123', location: 'page-2' });
+    await vi.advanceTimersByTimeAsync(1300);
+
+    const init = fetchMock.mock.calls[0]![1] as RequestInit & {
+      danger: { acceptInvalidCerts: boolean; acceptInvalidHostnames: boolean };
+    };
+    expect(init.danger).toEqual({
+      acceptInvalidCerts: true,
+      acceptInvalidHostnames: false,
+    });
   });
 
   it('does not persist when no server URL is forwarded', async () => {

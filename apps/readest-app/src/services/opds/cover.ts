@@ -8,6 +8,10 @@ import { getProxiedURL, needsProxy, probeAuth } from '@/app/opds/utils/opdsReq';
 import { READEST_OPDS_USER_AGENT } from '@/services/constants';
 import { getCoverFilename } from '@/utils/book';
 import { uniqueId } from '@/utils/misc';
+import {
+  allowsInvalidCertificate,
+  type InvalidCertificatePolicy,
+} from '@/services/transportSecurity';
 
 /**
  * Exact-match a link's rel tokens. Substring matching is wrong here:
@@ -63,6 +67,7 @@ interface ApplyOPDSCoverParams {
   username?: string;
   password?: string;
   customHeaders?: Record<string, string>;
+  security?: InvalidCertificatePolicy;
 }
 
 /**
@@ -79,6 +84,7 @@ export const applyOPDSCover = async ({
   username = '',
   password = '',
   customHeaders = {},
+  security = {},
 }: ApplyOPDSCoverParams): Promise<boolean> => {
   const useProxy = needsProxy(coverUrl);
   let downloadUrl = useProxy ? getProxiedURL(coverUrl, '', true, customHeaders) : coverUrl;
@@ -88,7 +94,14 @@ export const applyOPDSCover = async ({
     ...(!useProxy ? customHeaders : {}),
   };
   if (username || password) {
-    const authHeader = await probeAuth(coverUrl, username, password, useProxy, customHeaders);
+    const authHeader = await probeAuth(
+      coverUrl,
+      username,
+      password,
+      useProxy,
+      customHeaders,
+      security,
+    );
     if (authHeader) {
       if (!useProxy) {
         headers['Authorization'] = authHeader;
@@ -106,8 +119,7 @@ export const applyOPDSCover = async ({
       url: downloadUrl,
       headers,
       singleThreaded: true,
-      // Same self-signed/private-CA workaround the book download uses (#4988).
-      skipSslVerification: true,
+      skipSslVerification: allowsInvalidCertificate(coverUrl, security),
     });
     const bytes = (await appService.readFile(tmpPath, 'None', 'binary')) as ArrayBuffer;
     if (!bytes?.byteLength) return false;

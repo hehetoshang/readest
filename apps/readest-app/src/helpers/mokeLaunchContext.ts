@@ -95,6 +95,8 @@ export function bootstrapMokeLaunchContext(): void {
   window.__MOKE_DEBUG_PANEL = params.get('mokeDebug') === '1' || persistedDebugPanel;
   window.__MOKE_BOOK_ID = mokeBookId || null;
   window.__MOKE_SERVER_URL = serverUrl || null;
+  window.__MOKE_ALLOW_INVALID_CERTIFICATE =
+    params.get('mokeAllowInvalidCertificate') === '1' && serverUrl.startsWith('https://');
   let remoteProgress: Record<string, unknown> | null = null;
   const progress = params.get('mokeRestoreProgress');
   if (progress) {

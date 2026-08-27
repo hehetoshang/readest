@@ -21,14 +21,23 @@ type FakeResponseInit = {
   status?: number;
   body?: string;
   wwwAuthenticate?: string;
+  location?: string;
 };
 
-const makeResponse = ({ status = 200, body = '', wwwAuthenticate }: FakeResponseInit = {}) => ({
+const makeResponse = ({
+  status = 200,
+  body = '',
+  wwwAuthenticate,
+  location,
+}: FakeResponseInit = {}) => ({
   ok: status >= 200 && status < 300,
   status,
   headers: {
-    get: (name: string) =>
-      name.toLowerCase() === 'www-authenticate' ? (wwwAuthenticate ?? null) : null,
+    get: (name: string) => {
+      if (name.toLowerCase() === 'www-authenticate') return wwwAuthenticate ?? null;
+      if (name.toLowerCase() === 'location') return location ?? null;
+      return null;
+    },
   },
   text: async () => body,
 });
@@ -357,6 +366,74 @@ describe('opdsReq', () => {
       const init = tauriFetchMock.mock.calls[0]![1] as RequestInit;
       const headers = init.headers as Record<string, string>;
       expect(headers['Origin']).toBe('');
+    });
+
+    it('uses strict TLS defaults and never disables hostname validation', async () => {
+      tauriFetchMock.mockResolvedValue(makeResponse({ status: 200 }));
+
+      await fetchWithAuth('https://opds.example.com/feed', undefined, undefined, false);
+
+      const strictInit = tauriFetchMock.mock.calls[0]![1] as RequestInit & {
+        maxRedirections: number;
+        danger: { acceptInvalidCerts: boolean; acceptInvalidHostnames: boolean };
+      };
+      expect(strictInit.maxRedirections).toBe(0);
+      expect(strictInit.danger).toEqual({
+        acceptInvalidCerts: false,
+        acceptInvalidHostnames: false,
+      });
+
+      tauriFetchMock.mockClear();
+      tauriFetchMock.mockResolvedValue(makeResponse({ status: 200 }));
+      await fetchWithAuth(
+        'https://opds.example.com/feed',
+        undefined,
+        undefined,
+        false,
+        {},
+        {},
+        { serverUrl: 'https://opds.example.com/root', allowInvalidCertificate: true },
+      );
+      const authorizedInit = tauriFetchMock.mock.calls[0]![1] as RequestInit & {
+        danger: { acceptInvalidCerts: boolean; acceptInvalidHostnames: boolean };
+      };
+      expect(authorizedInit.danger).toEqual({
+        acceptInvalidCerts: true,
+        acceptInvalidHostnames: false,
+      });
+    });
+
+    it('re-evaluates TLS policy and strips credentials on a cross-origin redirect', async () => {
+      tauriFetchMock
+        .mockResolvedValueOnce(
+          makeResponse({
+            status: 302,
+            location: 'https://cdn.example.net/feed',
+          }),
+        )
+        .mockResolvedValueOnce(makeResponse({ status: 200 }));
+
+      await fetchWithAuth(
+        'https://opds.example.com/feed',
+        'alice',
+        's3cret',
+        false,
+        {},
+        { 'X-Api-Key': 'secret' },
+        { serverUrl: 'https://opds.example.com/feed', allowInvalidCertificate: true },
+      );
+
+      expect(tauriFetchMock).toHaveBeenCalledTimes(2);
+      const redirectedInit = tauriFetchMock.mock.calls[1]![1] as RequestInit & {
+        danger: { acceptInvalidCerts: boolean; acceptInvalidHostnames: boolean };
+      };
+      const redirectedHeaders = new Headers(redirectedInit.headers);
+      expect(redirectedHeaders.get('authorization')).toBeNull();
+      expect(redirectedHeaders.get('x-api-key')).toBeNull();
+      expect(redirectedInit.danger).toEqual({
+        acceptInvalidCerts: false,
+        acceptInvalidHostnames: false,
+      });
     });
   });
 });

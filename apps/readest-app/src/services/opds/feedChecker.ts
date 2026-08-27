@@ -18,6 +18,7 @@ import { getOPDSCoverHref } from './cover';
 import { classifyAcquisitionLink, pickPreferredLink } from './formats';
 import { getOPDSBookMetadata } from './metadata';
 import type { OPDSSubscriptionState, PendingItem } from './types';
+import type { InvalidCertificatePolicy } from '@/services/transportSecurity';
 import { MAX_CRAWL_DEPTH, MAX_FEEDS_PER_CRAWL, MAX_PAGES_PER_FEED } from './types';
 
 const SORT_NEW_REL = 'http://opds-spec.org/sort/new';
@@ -147,9 +148,10 @@ async function fetchFeed(
   username: string,
   password: string,
   customHeaders: Record<string, string>,
+  security: InvalidCertificatePolicy,
 ): Promise<{ feed: OPDSFeed; baseURL: string } | null> {
   const useProxy = isWebAppPlatform();
-  const res = await fetchWithAuth(url, username, password, useProxy, {}, customHeaders);
+  const res = await fetchWithAuth(url, username, password, useProxy, {}, customHeaders, security);
   if (!res.ok) {
     console.error(`OPDS sync: failed to fetch ${url}: ${res.status} ${res.statusText}`);
     return null;
@@ -175,7 +177,7 @@ async function fetchFeed(
       : null;
     if (link?.getAttribute('href')) {
       const resolvedURL = resolveURL(link.getAttribute('href')!, responseURL);
-      return fetchFeed(resolvedURL, username, password, customHeaders);
+      return fetchFeed(resolvedURL, username, password, customHeaders, security);
     }
   } else {
     try {
@@ -275,6 +277,7 @@ interface CrawlContext {
   username: string;
   password: string;
   customHeaders: Record<string, string>;
+  security: InvalidCertificatePolicy;
   visited: Set<string>;
   /** Follow subsection navigation entries (directory-style catalogs). */
   crawlNav: boolean;
@@ -324,7 +327,13 @@ async function crawlFeeds(
   let fetches = 1; // the start feed was already fetched by the caller
   while (queue.length > 0 && fetches < MAX_FEEDS_PER_CRAWL) {
     const node = queue.shift()!;
-    const next = await fetchFeed(node.url, ctx.username, ctx.password, ctx.customHeaders);
+    const next = await fetchFeed(
+      node.url,
+      ctx.username,
+      ctx.password,
+      ctx.customHeaders,
+      ctx.security,
+    );
     fetches++;
     if (!next) continue;
     processFeed(next.feed, next.baseURL, node.depth, node.page);
@@ -358,8 +367,12 @@ export async function checkFeedForNewItems(
   const username = catalog.username ?? '';
   const password = catalog.password ?? '';
   const visited = new Set<string>([catalog.url]);
+  const security = {
+    serverUrl: catalog.url,
+    allowInvalidCertificate: catalog.allowInvalidCertificate,
+  };
 
-  const root = await fetchFeed(catalog.url, username, password, customHeaders);
+  const root = await fetchFeed(catalog.url, username, password, customHeaders, security);
   if (!root) return [];
 
   const ctx: CrawlContext = {
@@ -368,6 +381,7 @@ export async function checkFeedForNewItems(
     username,
     password,
     customHeaders,
+    security,
     visited,
     crawlNav: false,
   };
@@ -376,7 +390,7 @@ export async function checkFeedForNewItems(
   if (newestURL) {
     if (!visited.has(newestURL)) {
       visited.add(newestURL);
-      const newest = await fetchFeed(newestURL, username, password, customHeaders);
+      const newest = await fetchFeed(newestURL, username, password, customHeaders, security);
       if (newest && feedHasContent(newest.feed)) return crawlFeeds(newest, ctx);
     }
     // Broken or empty "by newest" feed: fall back to the root feed's own

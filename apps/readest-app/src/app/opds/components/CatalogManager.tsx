@@ -10,6 +10,7 @@ import {
   IoEyeOff,
   IoEye,
   IoCloudDownloadOutline,
+  IoWarningOutline,
 } from 'react-icons/io5';
 import { MdChevronRight, MdDragIndicator } from 'react-icons/md';
 import {
@@ -56,6 +57,7 @@ import {
   parseCustomHeadersInput,
 } from '@/utils/customHeaders';
 import ModalPortal from '@/components/ModalPortal';
+import { isCleartextHttpUrl } from '@/services/transportSecurity';
 
 const POPULAR_CATALOGS: OPDSCatalog[] = [
   {
@@ -93,8 +95,12 @@ async function validateOPDSCatalog(
   username?: string,
   password?: string,
   customHeaders?: Record<string, string>,
+  allowInvalidCertificate = false,
 ): Promise<{ valid: boolean; error?: string }> {
-  const result = await validateOPDSURL(url, username, password, isWebAppPlatform(), customHeaders);
+  const result = await validateOPDSURL(url, username, password, isWebAppPlatform(), customHeaders, {
+    serverUrl: url,
+    allowInvalidCertificate,
+  });
   return { valid: result.isValid, error: result.error };
 }
 
@@ -114,6 +120,8 @@ const EMPTY_NEW_CATALOG = {
   password: '',
   customHeadersInput: '',
   proxyConsent: false,
+  cleartextConsent: false,
+  allowInvalidCertificate: false,
   autoDownload: false,
 };
 
@@ -264,6 +272,18 @@ function CatalogCard({
         <p className='text-base-content/55 truncate text-[11px]' title={catalog.url}>
           {catalog.url}
         </p>
+        {isCleartextHttpUrl(catalog.url) && (
+          <p className='text-warning flex items-start gap-1 text-[11px] leading-tight'>
+            <IoWarningOutline className='mt-px h-3.5 w-3.5 flex-shrink-0' />
+            {_('Cleartext HTTP can expose credentials and downloaded books.')}
+          </p>
+        )}
+        {catalog.allowInvalidCertificate && (
+          <p className='text-warning flex items-start gap-1 text-[11px] leading-tight'>
+            <IoWarningOutline className='mt-px h-3.5 w-3.5 flex-shrink-0' />
+            {_('Invalid certificates are allowed only for this server; hostname checks remain on.')}
+          </p>
+        )}
 
         {/* Auto-download row — label and toggle live in a SAME
             flex line (items-center → vertically centered with
@@ -412,6 +432,14 @@ export function CatalogManager({ inSubPage = false }: CatalogManagerProps = {}) 
     newCatalog.password.trim().length > 0 ||
     newCatalog.customHeadersInput.trim().length > 0;
   const isWebCatalogProxyWarningRequired = isWebAppPlatform() && hasSensitiveWebOPDSInput;
+  const isCleartextCatalog = isCleartextHttpUrl(newCatalog.url);
+  const isHttpsCatalog = (() => {
+    try {
+      return new URL(newCatalog.url).protocol === 'https:';
+    } catch {
+      return false;
+    }
+  })();
 
   // Hydrate from settings + persist when the store mutates. Loading
   // happens once per mount; the store handles backfilling contentId
@@ -458,6 +486,11 @@ export function CatalogManager({ inSubPage = false }: CatalogManagerProps = {}) 
       return;
     }
 
+    if (isCleartextCatalog && !newCatalog.cleartextConsent) {
+      setUrlError(_('Please confirm the cleartext HTTP risk before connecting to this catalog.'));
+      return;
+    }
+
     if (isWebCatalogProxyWarningRequired && !newCatalog.proxyConsent) {
       setProxyConsentError(
         _(
@@ -477,6 +510,7 @@ export function CatalogManager({ inSubPage = false }: CatalogManagerProps = {}) 
       newCatalog.username || undefined,
       newCatalog.password || undefined,
       parsedHeaders.headers,
+      newCatalog.allowInvalidCertificate,
     );
 
     if (!validation.valid) {
@@ -523,6 +557,7 @@ export function CatalogManager({ inSubPage = false }: CatalogManagerProps = {}) 
         username: newCatalog.username || undefined,
         password: newCatalog.password || undefined,
         customHeaders,
+        allowInvalidCertificate: newCatalog.allowInvalidCertificate || undefined,
         autoDownload: newCatalog.autoDownload || undefined,
       });
     } else {
@@ -534,6 +569,7 @@ export function CatalogManager({ inSubPage = false }: CatalogManagerProps = {}) 
         username: newCatalog.username || undefined,
         password: newCatalog.password || undefined,
         customHeaders,
+        allowInvalidCertificate: newCatalog.allowInvalidCertificate || undefined,
         autoDownload: newCatalog.autoDownload || undefined,
       });
     }
@@ -557,6 +593,8 @@ export function CatalogManager({ inSubPage = false }: CatalogManagerProps = {}) 
       password: catalog.password || '',
       customHeadersInput: formatCustomHeadersInput(catalog.customHeaders),
       proxyConsent: false,
+      cleartextConsent: isCleartextHttpUrl(catalog.url),
+      allowInvalidCertificate: catalog.allowInvalidCertificate || false,
       autoDownload: catalog.autoDownload || false,
     });
     setEditingCatalogId(catalog.id);
@@ -806,7 +844,12 @@ export function CatalogManager({ inSubPage = false }: CatalogManagerProps = {}) 
                     type='url'
                     value={newCatalog.url}
                     onChange={(e) => {
-                      setNewCatalog({ ...newCatalog, url: e.target.value });
+                      setNewCatalog({
+                        ...newCatalog,
+                        url: e.target.value,
+                        cleartextConsent: false,
+                        allowInvalidCertificate: false,
+                      });
                       setUrlError('');
                     }}
                     placeholder='https://example.com/opds'
@@ -820,6 +863,54 @@ export function CatalogManager({ inSubPage = false }: CatalogManagerProps = {}) 
                     </div>
                   )}
                 </div>
+
+                {isCleartextCatalog && (
+                  <div className='form-control border-warning/40 bg-warning/10 eink-bordered rounded-lg border p-4'>
+                    <label className='label cursor-pointer items-start justify-start gap-3 p-0'>
+                      <input
+                        type='checkbox'
+                        className='checkbox checkbox-sm mt-0.5'
+                        checked={newCatalog.cleartextConsent}
+                        onChange={(event) =>
+                          setNewCatalog({
+                            ...newCatalog,
+                            cleartextConsent: event.target.checked,
+                          })
+                        }
+                        disabled={isValidating}
+                      />
+                      <span className='label-text text-sm leading-6'>
+                        {_(
+                          'I understand that cleartext HTTP does not protect my OPDS credentials, catalog data, or downloaded books from interception and tampering.',
+                        )}
+                      </span>
+                    </label>
+                  </div>
+                )}
+
+                {!isWebAppPlatform() && isHttpsCatalog && (
+                  <div className='form-control border-warning/40 bg-warning/10 eink-bordered rounded-lg border p-4'>
+                    <label className='label cursor-pointer items-start justify-start gap-3 p-0'>
+                      <input
+                        type='checkbox'
+                        className='checkbox checkbox-sm mt-0.5'
+                        checked={newCatalog.allowInvalidCertificate}
+                        onChange={(event) =>
+                          setNewCatalog({
+                            ...newCatalog,
+                            allowInvalidCertificate: event.target.checked,
+                          })
+                        }
+                        disabled={isValidating}
+                      />
+                      <span className='label-text text-sm leading-6'>
+                        {_(
+                          'Allow an invalid or self-signed certificate only for this catalog server. This weakens TLS and can enable network interception; hostname mismatches will still be rejected. Uncheck to revoke.',
+                        )}
+                      </span>
+                    </label>
+                  </div>
+                )}
 
                 <div className='form-control'>
                   <div className='label'>

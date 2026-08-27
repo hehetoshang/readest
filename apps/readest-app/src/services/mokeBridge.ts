@@ -327,8 +327,13 @@ async function saveProgressToMokeServer(data: Record<string, unknown>): Promise<
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ progress: payload }),
       credentials: 'include',
-      maxRedirections: 5,
-      danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
+      // Progress writes never need a redirect. Refusing it prevents cookies or
+      // the exact-origin certificate grant from crossing to another server.
+      maxRedirections: 0,
+      danger: {
+        acceptInvalidCerts: window.__MOKE_ALLOW_INVALID_CERTIFICATE === true,
+        acceptInvalidHostnames: false,
+      },
     } as unknown as RequestInit);
   } catch (error) {
     // 尽力而为：保存失败不打断阅读，下一次翻页或关闭书籍时会重试。
