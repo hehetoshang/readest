@@ -42,6 +42,8 @@ const DEBUG_LOG_SYNC_EVENT = 'moke:debug-log-sync:v1';
 const MAX_LOGS_PER_TYPE = 1000;
 const MAX_PERSISTED_LOGS_PER_TYPE = 500;
 const MAX_PERSISTED_DETAIL_LENGTH = 20_000;
+const REACT_SCRIPT_TAG_WARNING =
+  'Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template).';
 const instanceId = createInstanceId();
 let counter = 0;
 let hydrated = false;
@@ -84,6 +86,10 @@ function isDebugLogEntry(value: unknown): value is DebugLogEntry {
   );
 }
 
+function isRetainedDebugLogEntry(value: unknown): value is DebugLogEntry {
+  return isDebugLogEntry(value) && value.message !== REACT_SCRIPT_TAG_WARNING;
+}
+
 function limitLogs(logs: DebugLogEntry[], perTypeLimit: number): DebugLogEntry[] {
   const newestFirst = [...logs].sort((a, b) => b.createdAt - a.createdAt);
   const counts: Record<DebugLogType, number> = { console: 0, network: 0 };
@@ -98,10 +104,14 @@ function limitLogs(logs: DebugLogEntry[], perTypeLimit: number): DebugLogEntry[]
 
 function mergeLogs(current: DebugLogEntry[], incoming: DebugLogEntry[]): DebugLogEntry[] {
   const byId = new Map(
-    current.filter((entry) => entry.createdAt > lastClearedAt).map((entry) => [entry.id, entry]),
+    current
+      .filter((entry) => isRetainedDebugLogEntry(entry) && entry.createdAt > lastClearedAt)
+      .map((entry) => [entry.id, entry]),
   );
   for (const entry of incoming) {
-    if (isDebugLogEntry(entry) && entry.createdAt > lastClearedAt) byId.set(entry.id, entry);
+    if (isRetainedDebugLogEntry(entry) && entry.createdAt > lastClearedAt) {
+      byId.set(entry.id, entry);
+    }
   }
   return limitLogs([...byId.values()], MAX_LOGS_PER_TYPE);
 }
@@ -121,7 +131,7 @@ function readPersistedLogs(): DebugLogEntry[] {
   try {
     const parsed: unknown = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]');
     return Array.isArray(parsed)
-      ? limitLogs(parsed.filter(isDebugLogEntry), MAX_PERSISTED_LOGS_PER_TYPE)
+      ? limitLogs(parsed.filter(isRetainedDebugLogEntry), MAX_PERSISTED_LOGS_PER_TYPE)
       : [];
   } catch {
     return [];
@@ -348,6 +358,7 @@ export function installConsoleCapture(): void {
   const capture = (level: DebugLogLevel, native: (...args: unknown[]) => void, args: unknown[]) => {
     native(...args);
     const { message, detail } = formatConsoleArgs(args);
+    if (message === REACT_SCRIPT_TAG_WARNING) return;
     useDebugLogStore.getState().addLog(level, 'console', message, detail, 'console');
   };
   console.log = (...args) => capture('info', originalConsole.log, args);
