@@ -17,6 +17,8 @@ if (isDev) {
 // assets are served under a distinct prefix (e.g. /readest/) and don't
 // collide with the host's own /_next/static/... assets.
 const embeddedBasePath = process.env['NEXT_PUBLIC_EMBEDDED_BASE_PATH'];
+const embeddedProfile = process.env['NEXT_PUBLIC_READEST_PROFILE'];
+const mokeReaderExport = embeddedProfile === 'moke-reader' && !isDev;
 const exportOutput = appPlatform !== 'web' && !isDev;
 // Opt-in standalone output, set only by the Docker production build
 // (Dockerfile). Every other path keeps the original behavior: Tauri `export`,
@@ -46,7 +48,11 @@ const nextConfig = {
   // Monorepo: trace from the repo root so workspace packages land in the
   // standalone tree. Only relevant to — and only set for — the Docker build.
   outputFileTracingRoot: standaloneOutput ? path.join(__dirname, '../../') : undefined,
-  pageExtensions: exportOutput ? ['jsx', 'tsx'] : ['js', 'jsx', 'ts', 'tsx'],
+  pageExtensions: mokeReaderExport
+    ? ['moke.tsx']
+    : exportOutput
+      ? ['jsx', 'tsx']
+      : ['js', 'jsx', 'ts', 'tsx'],
   // Note: This feature is required to use the Next.js Image component in SSG mode.
   // See https://nextjs.org/docs/messages/export-image-api for different workarounds.
   images: {
