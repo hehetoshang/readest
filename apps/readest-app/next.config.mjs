@@ -179,7 +179,9 @@ const nextConfig = {
   },
 };
 
-const pwaDisabled = isDev || appPlatform !== 'web';
+// Embedded exports share an origin with their host. Registering Readest's
+// root-scoped service worker there can intercept and cache the host's assets.
+const pwaDisabled = isDev || appPlatform !== 'web' || talebookExport;
 
 const withPWA = pwaDisabled
   ? (config) => config
