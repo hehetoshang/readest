@@ -7,7 +7,8 @@ import { TTSWordBoundary } from '@/libs/edgeTTS';
 import { TTSGranularity, TTSMark, TTSVoice, TTSVoicesGroup } from './types';
 import { AppService } from '@/types/system';
 import { parseSSMLMarks } from '@/utils/ssml';
-import { DEFAULT_PARAGRAPH_GAP_SEC, TTSController } from './TTSController';
+import type { TTSController } from './TTSController';
+import { DEFAULT_PARAGRAPH_GAP_SEC, DEFAULT_SENTENCE_GAP_SEC } from './defaults';
 import { TTSUtils } from './TTSUtils';
 import { findBoundaryIndexAtTime } from './wordHighlight';
 import { applyEdgeFade, findSpeechBounds } from './pcm';
@@ -45,7 +46,7 @@ import { TTSAudioBuffer, WebAudioPlayer, WebAudioPlayerEvent } from './WebAudioP
 // what arrives here is wall-clock seconds of silence. Note the native path only
 // cuts the trailing silence, so its audible gap also carries the next
 // utterance's ~0.18s of leading silence.
-export const DEFAULT_SENTENCE_GAP_SEC = 0.15;
+export { DEFAULT_SENTENCE_GAP_SEC } from './defaults';
 const TICKS_PER_SECOND = 10_000_000;
 
 // How many consecutive unreachable sentences (offline with nothing cached, or

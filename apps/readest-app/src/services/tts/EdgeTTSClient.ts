@@ -6,14 +6,14 @@ import { BookTTSCacheStore, getTTSCacheConfig } from './providers/bookCacheStore
 import { CachingProvider } from './providers/cache';
 import { EdgeSpeechProvider } from './providers/edge';
 import { SpeechProvider } from './providers/types';
-import { TTSController } from './TTSController';
+import type { TTSController } from './TTSController';
 
 // Everything engine-independent (scheduler, playout, word tracking, preload)
 // lives in BufferedTTSClient; the Edge specifics live in EdgeSpeechProvider.
 // This subclass keeps the persisted 'edge-tts' client name and owns the one
 // policy that needs app context: the wss -> https transport fallback, which
 // depends on the user's auth state.
-export { DEFAULT_SENTENCE_GAP_SEC } from './BufferedTTSClient';
+export { DEFAULT_SENTENCE_GAP_SEC } from './defaults';
 
 export class EdgeTTSClient extends BufferedTTSClient {
   #edgeProvider: EdgeSpeechProvider;

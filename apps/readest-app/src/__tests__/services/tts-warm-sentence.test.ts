@@ -1,9 +1,8 @@
 import { describe, expect, test, vi } from 'vitest';
 
-// Enter the module graph at EdgeTTSClient: constants.ts circularly imports it
-// for DEFAULT_SENTENCE_GAP_SEC, and entering at BufferedTTSClient leaves the
-// base class undefined when `EdgeTTSClient extends BufferedTTSClient` runs.
-import '@/services/tts/EdgeTTSClient';
+// Import the base client directly. This used to enter a cycle through
+// TTSController -> EdgeTTSClient and could crash the optimized reader bundle
+// before it mounted with "Cannot access uninitialized variable".
 import { BufferedTTSClient } from '@/services/tts/BufferedTTSClient';
 import { CachingProvider, TTSCacheStore } from '@/services/tts/providers/cache';
 import type { SpeechProvider } from '@/services/tts/providers/types';

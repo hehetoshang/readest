@@ -41,6 +41,7 @@ import {
   MEDIA_OVERLAY_VOICE_ID,
 } from './mediaOverlay';
 import { findPairedAudiobookSection, loadPairedAudiobookSection } from './pairedAudiobook';
+import { DEFAULT_PARAGRAPH_GAP_SEC } from './defaults';
 
 // App-wide monotonic sequence for 'tts-position' events. A fresh TTSController
 // is constructed per `tts-speak`, so a per-instance counter would restart at 0
@@ -94,7 +95,7 @@ export interface TTSViewBindings {
 // is engine-agnostic, handled entirely in #speak()/forward() below. There is
 // no natural pause here otherwise -- the transition is as fast as the async
 // stop/init overhead allows, which reads as no pause at all.
-export const DEFAULT_PARAGRAPH_GAP_SEC = 0.3;
+export { DEFAULT_PARAGRAPH_GAP_SEC } from './defaults';
 
 export class TTSController extends EventTarget {
   // PlaybackSource tag: the media bridge and the session manager consume this
