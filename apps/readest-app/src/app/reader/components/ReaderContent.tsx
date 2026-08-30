@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { Book } from '@/types/book';
@@ -32,8 +33,6 @@ import {
 import { clearDiscordPresence } from '@/utils/discord';
 import { BOOK_IDS_SEPARATOR } from '@/services/constants';
 import { emitReaderEvent } from '@/services/mokeBridge';
-import { BookDetailModal } from '@/components/metadata';
-import ShareBookDialog from '@/app/library/components/ShareBookDialog';
 import { useAuth } from '@/context/AuthContext';
 import { resolveReaderReturnTarget } from '@/utils/readerBack';
 
@@ -42,13 +41,21 @@ import useBookShortcuts from '../hooks/useBookShortcuts';
 import { useMokeCommandListener } from '../hooks/useMokeCommandListener';
 import Spinner from '@/components/Spinner';
 import SideBar from './sidebar/SideBar';
-import Notebook from './notebook/Notebook';
+import LazyNotebook from './notebook/LazyNotebook';
 import LocalSendManager from '@/components/localsend/LocalSendManager';
 import BooksGrid from './BooksGrid';
-import SettingsDialog from '@/components/settings/SettingsDialog';
-import AudiobookPairingDialog from './audiobook/AudiobookPairingDialog';
-import HardcoverLinkDialog from './hardcover/HardcoverLinkDialog';
 import { runTransientReaderBootstrap } from '../utils/transientReader';
+
+// These dialogs pull in metadata, sync-provider, and AI integrations that are
+// not needed to paint or open a book. Keep them out of the cold-start path and
+// load each one only after the corresponding user action.
+const SettingsDialog = dynamic(() => import('@/components/settings/SettingsDialog'));
+const AudiobookPairingDialog = dynamic(() => import('./audiobook/AudiobookPairingDialog'));
+const HardcoverLinkDialog = dynamic(() => import('./hardcover/HardcoverLinkDialog'));
+const BookDetailModal = dynamic(() =>
+  import('@/components/metadata').then((module) => module.BookDetailModal),
+);
+const ShareBookDialog = dynamic(() => import('@/app/library/components/ShareBookDialog'));
 
 // Moke mobile has a single WebView, so it navigates that WebView to the
 // bundled reader with the downloaded book path in the query string. Desktop
@@ -545,7 +552,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
           onClose={() => setHardcoverLinkBookKey(null)}
         />
       )}
-      <Notebook />
+      <LazyNotebook isPinned={settings.globalReadSettings.isNotebookPinned} />
       <LocalSendManager />
       {showDetailsBook && (
         <BookDetailModal
@@ -554,12 +561,14 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
           onClose={() => setShowDetailsBook(null)}
         />
       )}
-      <ShareBookDialog
-        isOpen={!!shareDialogState}
-        book={shareDialogState?.book ?? null}
-        cfi={shareDialogState?.cfi ?? null}
-        onClose={() => setShareDialogState(null)}
-      />
+      {shareDialogState && (
+        <ShareBookDialog
+          isOpen={true}
+          book={shareDialogState.book}
+          cfi={shareDialogState.cfi}
+          onClose={() => setShareDialogState(null)}
+        />
+      )}
     </div>
   );
 };
