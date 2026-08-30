@@ -1,5 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
-import { exportBook, getBookFileSize, isBookAvailable } from '@/services/bookService';
+import {
+  exportBook,
+  getBookFileSize,
+  isBookAvailable,
+  loadBookContent,
+} from '@/services/bookService';
 import { getLocalBookFilename } from '@/utils/book';
 import type { Book } from '@/types/book';
 import type { BaseDir, FileSystem } from '@/types/system';
@@ -48,6 +53,29 @@ function makeFs(options: {
 }
 
 describe('book content source resolution', () => {
+  test('opens the file and resolves its native path from one authorized source lookup', async () => {
+    const book = makeBook({ filePath: '/Users/me/Library/sample.epub' });
+    const file = new File(['external content'], 'sample.epub');
+    const fs = makeFs({
+      existing: [[book.filePath!, 'None']],
+      files: { 'None:/Users/me/Library/sample.epub': file },
+    });
+    const resolveFilePath = vi.fn(async (path: string, base: BaseDir) =>
+      base === 'None' ? `file://${path}` : `/managed/${path}`,
+    );
+
+    await expect(loadBookContent(fs, book, resolveFilePath)).resolves.toEqual({
+      book,
+      file,
+      nativeFilePath: '/Users/me/Library/sample.epub',
+    });
+    expect(fs.exists).toHaveBeenCalledTimes(2);
+    expect(fs.openFile).toHaveBeenCalledOnce();
+    expect(fs.openFile).toHaveBeenCalledWith(book.filePath, 'None');
+    expect(resolveFilePath).toHaveBeenCalledOnce();
+    expect(resolveFilePath).toHaveBeenCalledWith(book.filePath, 'None');
+  });
+
   test('getBookFileSize reads external in-place sources when no managed copy exists', async () => {
     const book = makeBook({ filePath: '/Users/me/Library/sample.epub' });
     const fs = makeFs({

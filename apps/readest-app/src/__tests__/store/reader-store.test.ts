@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import type { FoliateView } from '@/types/view';
 import type { Insets } from '@/types/misc';
-import type { ViewSettings } from '@/types/book';
+import type { Book, BookConfig, BookContent, ViewSettings } from '@/types/book';
 
 vi.mock('@/store/bookDataStore', async () => {
   const { create } = await import('zustand');
@@ -40,7 +40,12 @@ vi.mock('@/utils/misc', () => ({
 }));
 
 // These are transitive imports needed by readerStore
-vi.mock('@/services/nav', () => ({ updateToc: vi.fn() }));
+vi.mock('@/services/nav', () => ({
+  computeBookNav: vi.fn(),
+  hydrateBookNav: vi.fn(),
+  isBookNavCacheCurrent: vi.fn(() => true),
+  updateToc: vi.fn(),
+}));
 vi.mock('@/utils/book', () => ({
   formatTitle: vi.fn((t: string) => t),
   getMetadataHash: vi.fn(() => 'hash'),
@@ -70,6 +75,10 @@ vi.mock('@/services/rss/feedReader', () => ({
 
 import { useReaderStore } from '@/store/readerStore';
 import { useBookDataStore } from '@/store/bookDataStore';
+import { useLibraryStore } from '@/store/libraryStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { DocumentLoader, type BookDoc } from '@/libs/document';
+import { computeBookNav, hydrateBookNav, isBookNavCacheCurrent } from '@/services/nav';
 import { uniqueId } from '@/utils/misc';
 
 /**
@@ -108,6 +117,86 @@ describe('readerStore', () => {
       hoveredBookKey: null,
     });
     useBookDataStore.setState({ booksData: {} });
+  });
+
+  describe('initViewState', () => {
+    test('starts independent content and sidecar reads and reuses the authorized native path', async () => {
+      let resolveContent!: (content: BookContent) => void;
+      const contentPromise = new Promise<BookContent>((resolve) => {
+        resolveContent = resolve;
+      });
+      const file = new File(['epub'], 'book.epub', { type: 'application/epub+zip' });
+      const book: Book = {
+        hash: 'bookid',
+        title: 'Book',
+        author: 'Author',
+        format: 'EPUB',
+        createdAt: 1,
+        updatedAt: 1,
+      };
+      const config = { viewSettings: {}, booknotes: [] } as unknown as BookConfig;
+      const bookDoc = {
+        metadata: { title: 'Book' },
+        rendition: {},
+        toc: [],
+        sections: [],
+      } as unknown as BookDoc;
+      const cachedNav = { version: 3, toc: [], sections: {} };
+      const appService = {
+        loadBookContent: vi.fn(() => contentPromise),
+        resolveNativeBookFilePath: vi.fn(async () => '/books/book.epub'),
+        loadBookConfig: vi.fn(async () => config),
+        loadBookNav: vi.fn(async () => cachedNav),
+        saveBookNav: vi.fn(async () => undefined),
+      };
+      const envConfig = { getAppService: vi.fn(async () => appService) };
+
+      vi.mocked(useLibraryStore.getState().getBookByHash).mockReturnValue(book);
+      useSettingsStore.setState({ settings: { globalViewSettings: {} } as never });
+      vi.mocked(DocumentLoader).mockImplementation(function MockDocumentLoader() {
+        return { open: vi.fn(async () => ({ book: bookDoc })) };
+      } as never);
+      vi.mocked(isBookNavCacheCurrent).mockReturnValue(true);
+      vi.mocked(computeBookNav).mockResolvedValue(cachedNav);
+
+      const initPromise = useReaderStore
+        .getState()
+        .initViewState(envConfig as never, book.hash, `${book.hash}-0`);
+
+      await vi.waitFor(() => expect(appService.loadBookContent).toHaveBeenCalledOnce());
+      // Sidecar reads do not depend on the File bytes. Keeping them behind
+      // loadBookContent/DocumentLoader serializes Tauri IPC on every Moke open.
+      expect(appService.loadBookConfig).toHaveBeenCalledOnce();
+      expect(appService.loadBookNav).toHaveBeenCalledOnce();
+
+      resolveContent({ book, file, nativeFilePath: '/books/book.epub' });
+      await initPromise;
+
+      expect(appService.resolveNativeBookFilePath).not.toHaveBeenCalled();
+      expect(DocumentLoader).toHaveBeenCalledWith(file, {
+        nativeFilePath: '/books/book.epub',
+      });
+      expect(hydrateBookNav).toHaveBeenCalledWith(bookDoc, cachedNav);
+      expect(useReaderStore.getState().getViewState(`${book.hash}-0`)?.loading).toBe(false);
+      // Persisting a performance-only nav cache must not delay book:opened or
+      // the first restored page, but it still runs shortly afterward.
+      expect(appService.saveBookNav).not.toHaveBeenCalled();
+      const pageInfo = { current: 0, next: 1, total: 10 };
+      useReaderStore
+        .getState()
+        .setProgress(
+          `${book.hash}-0`,
+          'epubcfi(/6/2)',
+          { label: 'Chapter 1', href: 'chapter.xhtml' } as never,
+          undefined,
+          pageInfo,
+          pageInfo,
+          { section: 10, total: 100 },
+          document.createRange(),
+          0.1,
+        );
+      await vi.waitFor(() => expect(appService.saveBookNav).toHaveBeenCalledWith(book, cachedNav));
+    });
   });
 
   describe('initial state', () => {

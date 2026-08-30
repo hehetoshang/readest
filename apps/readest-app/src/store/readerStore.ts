@@ -38,6 +38,21 @@ import {
   type MokeAnnotationNavigationContext,
 } from '@/services/mokeBridge';
 
+const pendingNavCacheWrites = new Map<string, () => Promise<void>>();
+
+const scheduleNavCacheWrite = (bookHash: string, write: () => Promise<void>) => {
+  pendingNavCacheWrites.set(bookHash, write);
+};
+
+const flushNavCacheWrite = (bookHash: string) => {
+  const write = pendingNavCacheWrites.get(bookHash);
+  if (!write) return;
+  pendingNavCacheWrites.delete(bookHash);
+  void write().catch((error) => {
+    console.warn('Failed to persist book nav cache:', error);
+  });
+};
+
 interface ViewState {
   /* Unique key for each book view */
   key: string;
@@ -147,6 +162,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
   },
 
   clearViewState: (key: string) => {
+    // An open that closes before its first relocate has no reason to persist
+    // a warm-open cache afterward.
+    pendingNavCacheWrites.delete(key.split('-')[0]!);
     // Drop the per-book progress entry alongside the view state so the
     // standalone progress store doesn't leak across opens/closes.
     // Event emission (book:closed) is handled by the close handler
@@ -207,6 +225,19 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         );
         throw new Error('Book not found');
       }
+      // Config and cached navigation are independent of the book bytes. Start
+      // their sidecar I/O immediately so Tauri filesystem round-trips overlap
+      // file handoff and EPUB parsing instead of serializing the critical path.
+      const configPromise = appService.loadBookConfig(book, settings);
+      const cachedNavPromise =
+        book.format === 'EPUB' ? appService.loadBookNav(book) : Promise.resolve(null);
+      // Fixed-layout EPUBs do not consume the speculative nav result below.
+      // Attach a handler now so a non-standard AppService rejection can never
+      // become unhandled while document parsing is in progress.
+      void cachedNavPromise.catch((error) => {
+        console.warn('Failed to preload book nav cache:', error);
+      });
+
       const isPseStream = !!book.url && isPseStreamFileName(book.url);
       const isFeed = !!book.url && isFeedBookUrl(book.url);
       let bookDoc = bookData?.bookDoc;
@@ -227,19 +258,13 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         } else {
           const content = (await appService.loadBookContent(book)) as BookContent;
           file = content.file;
-          let nativeFilePath: string | null = null;
-          try {
-            nativeFilePath = await appService.resolveNativeBookFilePath(book);
-          } catch (err) {
-            console.warn('resolveNativeBookFilePath failed', err);
-          }
           const doc = await new DocumentLoader(file, {
-            nativeFilePath: nativeFilePath ?? undefined,
+            nativeFilePath: content.nativeFilePath ?? undefined,
           }).open();
           bookDoc = doc.book;
         }
       }
-      const config = await appService.loadBookConfig(book, settings);
+      const config = await configPromise;
       // Import annotations from third-party readers on first open
       if (bookDoc.metadata.identifier) {
         const { getAnnotationProviders } = await import('@/services/annotation');
@@ -263,17 +288,20 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         [];
       // Load cached book navigation (TOC + section fragments) or compute and persist.
       if (book.format === 'EPUB' && bookDoc.rendition?.layout !== 'pre-paginated') {
-        const cachedNav = await appService.loadBookNav(book);
+        const cachedNav = await cachedNavPromise;
         if (isBookNavCacheCurrent(cachedNav) && process.env.NODE_ENV === 'production') {
           hydrateBookNav(bookDoc, cachedNav);
         } else {
           const freshNav = await computeBookNav(bookDoc);
           hydrateBookNav(bookDoc, freshNav);
-          try {
+          // nav.json is only a warm-open cache. Keep its write behind the first
+          // restored page so internal filesystem I/O cannot delay book:opened
+          // or contend with first-chapter resource/layout work.
+          scheduleNavCacheWrite(book.hash, async () => {
+            const currentBook = useLibraryStore.getState().getBookByHash(book.hash);
+            if (!currentBook || currentBook.deletedAt) return;
             await appService.saveBookNav(book, freshNav);
-          } catch (e) {
-            console.warn('Failed to persist book nav cache:', e);
-          }
+          });
         }
       }
       await updateToc(
@@ -357,6 +385,7 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         });
       }
     } catch (error) {
+      pendingNavCacheWrites.delete(id);
       console.error(error);
       set((state) => ({
         viewStates: {
@@ -517,6 +546,12 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
       range,
       page: pageInfo.current + 1,
     } as BookProgress);
+
+    // A successful first relocate is the end of the measured restoration
+    // path. Only now let the performance-only nav cache write use filesystem
+    // bandwidth; later page changes are a no-op after the pending write is
+    // removed from the map.
+    flushNavCacheWrite(id);
   },
   setBookmarkRibbonVisibility: (key: string, visible: boolean) =>
     set((state) => ({

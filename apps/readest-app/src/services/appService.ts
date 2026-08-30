@@ -596,7 +596,7 @@ export abstract class BaseAppService implements AppService {
   }
 
   async loadBookContent(book: Book): Promise<BookContent> {
-    return BookSvc.loadBookContent(this.fs, book);
+    return BookSvc.loadBookContent(this.fs, book, this.resolveFilePath.bind(this));
   }
 
   async resolveNativeBookFilePath(book: Book): Promise<string | null> {

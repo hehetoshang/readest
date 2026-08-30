@@ -940,9 +940,37 @@ async function openBookFileContent(
   return { source, file: await fs.openFile(source.path, source.base) };
 }
 
-export async function loadBookContent(fs: FileSystem, book: Book): Promise<BookContent> {
-  const { file } = await openBookFileContent(fs, book);
-  return { book, file };
+async function resolveNativeSourceFilePath(
+  source: BookFileContentSource,
+  resolveFilePath?: (path: string, base: BaseDir) => Promise<string>,
+): Promise<string | null> {
+  if (!resolveFilePath || (source.kind !== 'managed' && source.kind !== 'external')) return null;
+  try {
+    const fp = await resolveFilePath(source.path, source.base);
+    if (!fp) return null;
+    return fp.startsWith('file://') ? decodeURI(fp.slice('file://'.length)) : fp;
+  } catch {
+    return null;
+  }
+}
+
+export async function loadBookContent(
+  fs: FileSystem,
+  book: Book,
+  resolveFilePath?: (path: string, base: BaseDir) => Promise<string>,
+): Promise<BookContent> {
+  const source = await resolveBookContentSource(fs, book);
+  if (!isBookFileContentSource(source)) {
+    throw new BookFileNotFoundError();
+  }
+  // Both operations use the same authorization-checked source. Resolving them
+  // together avoids a second resolveBookContentSource/exists chain while the
+  // file open and native-path lookup can still overlap.
+  const [file, nativeFilePath] = await Promise.all([
+    fs.openFile(source.path, source.base),
+    resolveNativeSourceFilePath(source, resolveFilePath),
+  ]);
+  return { book, file, nativeFilePath };
 }
 
 /**
@@ -960,10 +988,8 @@ export async function resolveNativeBookFilePath(
 ): Promise<string | null> {
   try {
     const source = await resolveBookContentSource(fs, book);
-    if (source.kind !== 'managed' && source.kind !== 'external') return null;
-    const fp = await resolveFilePath(source.path, source.base);
-    if (!fp) return null;
-    return fp.startsWith('file://') ? decodeURI(fp.slice('file://'.length)) : fp;
+    if (!isBookFileContentSource(source)) return null;
+    return await resolveNativeSourceFilePath(source, resolveFilePath);
   } catch {
     return null;
   }
