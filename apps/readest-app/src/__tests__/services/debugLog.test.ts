@@ -17,22 +17,22 @@ describe('Readest debug logging', () => {
     useDebugLogStore.setState({ logs: [] });
   });
 
-  it('does not retain React development script-tag noise as a reader error', () => {
+  it('captures every console error instead of hiding framework diagnostics', () => {
     installConsoleCapture();
 
-    console.error(
-      'Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template).',
-    );
+    const frameworkError =
+      'Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template).';
+    console.error(frameworkError);
     console.error('reader crashed');
 
-    expect(useDebugLogStore.getState().logs).toHaveLength(1);
-    expect(useDebugLogStore.getState().logs[0]).toMatchObject({
-      level: 'error',
-      message: 'reader crashed',
-    });
+    expect(useDebugLogStore.getState().logs).toHaveLength(2);
+    expect(useDebugLogStore.getState().logs.map((entry) => entry.message)).toEqual([
+      frameworkError,
+      'reader crashed',
+    ]);
   });
 
-  it('drops persisted script-tag noise while restoring other reader errors', () => {
+  it('restores persisted framework diagnostics with other reader errors', () => {
     const base = {
       time: '11:51:58.776',
       createdAt: Date.now(),
@@ -56,11 +56,14 @@ describe('Readest debug logging', () => {
 
     hydrateDebugLogs();
 
-    expect(useDebugLogStore.getState().logs).toHaveLength(1);
-    expect(useDebugLogStore.getState().logs[0]?.message).toBe('book failed to open');
+    expect(useDebugLogStore.getState().logs).toHaveLength(2);
+    expect(useDebugLogStore.getState().logs.map((entry) => entry.message)).toEqual([
+      'Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template).',
+      'book failed to open',
+    ]);
   });
 
-  it('drops script-tag noise reintroduced by synchronized state', () => {
+  it('retains framework diagnostics while merging synchronized state', () => {
     const createdAt = Date.now();
     useDebugLogStore.setState({
       logs: [
@@ -80,8 +83,11 @@ describe('Readest debug logging', () => {
 
     useDebugLogStore.getState().addLog('error', 'console', 'synchronized reader error');
 
-    expect(useDebugLogStore.getState().logs).toHaveLength(1);
-    expect(useDebugLogStore.getState().logs[0]?.message).toBe('synchronized reader error');
+    expect(useDebugLogStore.getState().logs).toHaveLength(2);
+    expect(useDebugLogStore.getState().logs.map((entry) => entry.message)).toEqual([
+      'Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template).',
+      'synchronized reader error',
+    ]);
   });
 
   it('persists Readest entries so a document reload does not clear them', () => {

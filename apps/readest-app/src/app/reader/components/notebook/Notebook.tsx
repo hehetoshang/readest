@@ -34,6 +34,7 @@ import NoteEditor from './NoteEditor';
 import SearchBar from './SearchBar';
 import NotebookTabNavigation from './NotebookTabNavigation';
 import EmptyState from '../EmptyState';
+import { shouldMountNotebook } from './notebookVisibility';
 
 const MIN_NOTEBOOK_WIDTH = 0.15;
 const MAX_NOTEBOOK_WIDTH = 0.45;
@@ -104,7 +105,12 @@ const Notebook: React.FC = ({}) => {
   useEffect(() => {
     setNotebookWidth(settings.globalReadSettings.notebookWidth);
     setNotebookPin(settings.globalReadSettings.isNotebookPinned);
-    setNotebookVisible(settings.globalReadSettings.isNotebookPinned);
+    // Lazy mounting happens after an unpinned user explicitly opens the
+    // notebook. Preserve that store state instead of immediately hiding the
+    // newly mounted panel; a pinned notebook still opens on reader startup.
+    setNotebookVisible(
+      shouldMountNotebook(isNotebookVisible, settings.globalReadSettings.isNotebookPinned),
+    );
     if (settings.globalReadSettings.notebookActiveTab) {
       setNotebookActiveTab(settings.globalReadSettings.notebookActiveTab);
     }

@@ -81,7 +81,7 @@ const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ['isows'],
   allowedDevOrigins: ['127.0.0.1', 'localhost', '192.168.2.120'],
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       nunjucks: 'nunjucks/browser/nunjucks.js',

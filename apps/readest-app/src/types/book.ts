@@ -704,4 +704,9 @@ export interface BooksGroup {
 export interface BookContent {
   book: Book;
   file: File;
+  /**
+   * Absolute path for native parsers, resolved from the same authorized source
+   * as `file`. Null for URL/in-memory sources.
+   */
+  nativeFilePath?: string | null;
 }
