@@ -74,6 +74,54 @@ export function sanitizeHtml(html: string): string {
 }
 
 /**
+ * Sanitize untrusted book-description metadata for inline display.
+ *
+ * Descriptions only need inert text formatting. In particular, they must not
+ * contain links or resource-bearing elements: an EPUB can otherwise turn the
+ * book-details panel into a network beacon or navigation surface even when
+ * script execution is blocked by CSP.
+ */
+export function sanitizeDescriptionHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'p',
+      'br',
+      'hr',
+      'blockquote',
+      'pre',
+      'code',
+      'strong',
+      'em',
+      'b',
+      'i',
+      'u',
+      's',
+      'del',
+      'ins',
+      'sup',
+      'sub',
+      'small',
+      'mark',
+      'ul',
+      'ol',
+      'li',
+      'dl',
+      'dt',
+      'dd',
+    ],
+    ALLOWED_ATTR: [],
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'],
+    ALLOW_DATA_ATTR: false,
+  });
+}
+
+/**
  * Strip scripts and event handlers from an untrusted *document* before it is
  * handed to `DOMParser`. Unlike `sanitizeHtml`, this keeps the document
  * structure (`<head>`, `<title>`, sectioning elements) so title extraction and
