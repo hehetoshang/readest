@@ -1,0 +1,21 @@
+{
+  "_comment": "Shared native/web limits for untrusted ebook parsing. The defaults target mobile devices: ordinary illustrated books remain well below them, while metadata-only zip bombs and oversized cover headers are rejected before large allocations. Raising a value requires reviewing both Rust and WebView memory costs.",
+  "zip": {
+    "maxEntries": 10000,
+    "maxCentralDirectoryBytes": 67108864,
+    "maxEntryUncompressedBytes": 134217728,
+    "maxTotalUncompressedBytes": 1073741824,
+    "maxCompressionRatio": 200
+  },
+  "image": {
+    "maxInputBytes": 33554432,
+    "maxWidth": 8192,
+    "maxHeight": 8192,
+    "maxPixels": 32000000,
+    "maxDecodedBytes": 134217728
+  },
+  "mobi": {
+    "maxFileBytes": 134217728,
+    "maxDeclaredTextBytes": 268435456
+  }
+}

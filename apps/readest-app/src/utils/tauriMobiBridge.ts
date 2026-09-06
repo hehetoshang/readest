@@ -36,6 +36,11 @@
 // boundary and is a no-op on the web platform.
 import { invoke } from '@tauri-apps/api/core';
 import { isTauriAppPlatform } from '@/services/environment';
+import {
+  BookResourceLimitError,
+  assertMobiDeclarations,
+  isBookResourceLimitError,
+} from '@/utils/bookResourceLimits';
 import type { BookDoc, BookMetadata } from '@/libs/document';
 import type { BookFormat } from '@/types/book';
 
@@ -146,6 +151,7 @@ export const tryNativeParseMobi = async (
 ): Promise<NativeParsedMobi | null> => {
   if (!isEligibleMobiPath(filePath)) return null;
   try {
+    await assertMobiDeclarations(fileobj);
     const rust = await invoke<RustParsedMobi>('parse_mobi_metadata', { filePath });
     if (!rust || !rust.partialMd5) return null;
 
@@ -186,6 +192,7 @@ export const tryNativeParseMobi = async (
       bookDoc: buildBookDocStub(metadata, coverBlob, getCover),
     };
   } catch (err) {
+    if (isBookResourceLimitError(err)) throw new BookResourceLimitError();
     console.warn('[tauriMobiBridge] native parse failed, falling back to JS:', err);
     return null;
   }

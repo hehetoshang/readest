@@ -1,4 +1,7 @@
-use crate::parser_common::{COVER_JPEG_QUALITY, COVER_MAX_LONG_EDGE, COVER_RESIZE_FILTER};
+use crate::parser_common::{
+    decode_image_with_limits, COVER_JPEG_QUALITY, COVER_MAX_LONG_EDGE, COVER_RESIZE_FILTER,
+};
+use crate::parser_limits::validate_image_input_size_u64;
 use crate::transfer_file::ensure_path_allowed;
 use image::{codecs::jpeg::JpegEncoder, GenericImageView};
 use serde::{Deserialize, Serialize};
@@ -225,6 +228,10 @@ fn create_or_reuse_thumbnail(job: &CoverJob) -> Result<PathBuf, String> {
         return Ok(job.destination.clone());
     }
 
+    let source_size = fs::metadata(&job.source)
+        .map_err(|error| format!("read failed: {error}"))?
+        .len();
+    validate_image_input_size_u64(source_size)?;
     let bytes = fs::read(&job.source).map_err(|error| format!("read failed: {error}"))?;
     let thumbnail = encode_thumbnail(&bytes)?;
     let parent = job
@@ -249,8 +256,7 @@ fn create_or_reuse_thumbnail(job: &CoverJob) -> Result<PathBuf, String> {
 }
 
 fn encode_thumbnail(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let image =
-        image::load_from_memory(bytes).map_err(|error| format!("decode failed: {error}"))?;
+    let image = decode_image_with_limits(bytes)?;
     let (width, height) = image.dimensions();
     let image = if width.max(height) > COVER_MAX_LONG_EDGE {
         image.resize(

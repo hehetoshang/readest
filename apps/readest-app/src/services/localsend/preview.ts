@@ -1,3 +1,5 @@
+import { assertImageDimensions, readRasterImageDimensions } from '@/utils/bookResourceLimits';
+
 /** Longest edge of the cover thumbnail embedded in a transfer request. */
 const COVER_PREVIEW_MAX_EDGE = 192;
 
@@ -30,8 +32,16 @@ export function previewDataUrl(preview: string | null | undefined): string | nul
  * LocalSend `preview` wire format), or null when the image cannot be decoded.
  */
 export async function coverPreviewBase64(bytes: ArrayBuffer): Promise<string | null> {
+  let bitmap: ImageBitmap | undefined;
   try {
-    const bitmap = await createImageBitmap(new Blob([bytes]));
+    const dimensions = readRasterImageDimensions(bytes);
+    if (!dimensions) return null;
+    assertImageDimensions(dimensions.width, dimensions.height);
+
+    bitmap = await createImageBitmap(new Blob([bytes]));
+    // Check the decoder's result too; header probing is the pre-allocation gate,
+    // while this catches formats whose effective canvas differs from the header.
+    assertImageDimensions(bitmap.width, bitmap.height);
     const scale = Math.min(1, COVER_PREVIEW_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
@@ -41,9 +51,10 @@ export async function coverPreviewBase64(bytes: ArrayBuffer): Promise<string | n
     const context = canvas.getContext('2d');
     if (!context) return null;
     context.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close();
     return canvas.toDataURL('image/jpeg', 0.7).split(',')[1] || null;
   } catch {
     return null;
+  } finally {
+    bitmap?.close();
   }
 }

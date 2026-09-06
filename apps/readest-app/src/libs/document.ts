@@ -1,5 +1,13 @@
 import { BookFormat } from '@/types/book';
 import { Collection, Contributor, Identifier, LanguageMap } from '@/utils/book';
+import {
+  BOOK_RESOURCE_LIMITS,
+  BookResourceLimitError,
+  ZipResourceValidator,
+  assertInflatedEntrySize,
+  assertMobiDeclarations,
+  preflightZipArchive,
+} from '@/utils/bookResourceLimits';
 import { configureZip } from '@/utils/zip';
 import * as epubcfi from 'foliate-js/epubcfi.js';
 
@@ -268,10 +276,50 @@ export class DocumentLoader {
     };
 
     await configureZip();
-    const { ZipReader, BlobReader, TextWriter, BlobWriter } = await import('@zip.js/zip.js');
+    const { ZipReader, BlobReader, Writer } = await import('@zip.js/zip.js');
     type Entry = import('@zip.js/zip.js').Entry;
+    await preflightZipArchive(this.file);
     const reader = new ZipReader(new BlobReader(this.file));
-    const entries = await reader.getEntries();
+    const validator = new ZipResourceValidator();
+    const entries: Entry[] = [];
+    for await (const entry of reader.getEntriesGenerator()) {
+      validator.add(entry);
+      entries.push(entry);
+    }
+
+    // The writer rejects while chunks are still streaming, using the smaller
+    // of the declared size and the global entry cap. A forged low declaration
+    // therefore cannot inflate to the cap before zip.js notices the mismatch.
+    class LimitedBlobWriter extends Writer<Blob> {
+      private readonly parts: ArrayBuffer[] = [];
+      private written = 0;
+
+      constructor(
+        private readonly declaredSize: number,
+        private readonly contentType?: string,
+      ) {
+        super();
+      }
+
+      override async writeUint8Array(array: Uint8Array): Promise<void> {
+        const nextSize = this.written + array.byteLength;
+        if (
+          nextSize > this.declaredSize ||
+          nextSize > BOOK_RESOURCE_LIMITS.zip.maxEntryUncompressedBytes
+        ) {
+          throw new BookResourceLimitError();
+        }
+        const copy = new Uint8Array(array.byteLength);
+        copy.set(array);
+        this.parts.push(copy.buffer);
+        this.written = nextSize;
+      }
+
+      override async getData(): Promise<Blob> {
+        assertInflatedEntrySize(this.written, this.declaredSize);
+        return new Blob(this.parts, { type: this.contentType });
+      }
+    }
     const map = new Map(entries.map((entry) => [entry.filename, entry]));
     const lowercaseMap = new Map<string, Entry | null>();
     for (const entry of entries) {
@@ -285,18 +333,26 @@ export class DocumentLoader {
     const getEntry = (name: string) =>
       map.get(name) ?? lowercaseMap.get(name.toLowerCase()) ?? null;
     const load =
-      (f: (entry: Entry, type?: string) => Promise<string | Blob> | null) =>
+      (f: (entry: Entry, type?: string) => Promise<string | Blob | null> | null) =>
       (name: string, ...args: [string?]) => {
         const entry = getEntry(name);
         return entry ? f(entry, ...args) : null;
       };
 
-    const zipLoadText = load((entry: Entry) =>
-      !entry.directory ? entry.getData(new TextWriter()) : null,
-    );
-    const loadBlob = load((entry: Entry, type?: string) =>
-      !entry.directory ? entry.getData(new BlobWriter(type!)) : null,
-    );
+    const zipLoadText = load(async (entry: Entry) => {
+      if (entry.directory) return null;
+      const blob = await entry.getData(
+        new LimitedBlobWriter(entry.uncompressedSize, 'text/plain;charset=utf-8'),
+      );
+      assertInflatedEntrySize(blob.size, entry.uncompressedSize);
+      return blob.text();
+    });
+    const loadBlob = load(async (entry: Entry, type?: string) => {
+      if (entry.directory) return null;
+      const blob = await entry.getData(new LimitedBlobWriter(entry.uncompressedSize, type));
+      assertInflatedEntrySize(blob.size, entry.uncompressedSize);
+      return blob;
+    });
 
     // Prefetch fast-path: foliate-js's EPUB.init() reads container.xml,
     // the OPF, the EPUB3 nav and (if present) the NCX via this very
@@ -460,6 +516,7 @@ export class DocumentLoader {
         book = await makePDF(this.file);
         format = 'PDF';
       } else if (await (await import('foliate-js/mobi.js')).isMOBI(this.file)) {
+        await assertMobiDeclarations(this.file);
         const fflate = await import('foliate-js/vendor/fflate.js');
         const { MOBI } = await import('foliate-js/mobi.js');
         book = await new MOBI({ unzlib: fflate.unzlibSync }).open(this.file);

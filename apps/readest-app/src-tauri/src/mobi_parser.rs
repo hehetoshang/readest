@@ -38,6 +38,7 @@ use serde::Serialize;
 use std::path::Path;
 
 use crate::parser_common::{compute_partial_md5, maybe_resize_cover, RawCoverImage};
+use crate::parser_limits::{validate_image_input_size, validate_mobi_file};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,19 +67,31 @@ pub async fn parse_mobi_metadata(file_path: String) -> Result<ParsedMobi, String
 fn parse_mobi_metadata_sync(file_path: &str) -> Result<ParsedMobi, String> {
     let path = Path::new(file_path);
     if !path.is_file() {
-        return Err(format!("file not found: {file_path}"));
+        return Err("The book file could not be found.".to_string());
     }
+    validate_mobi_file(path)?;
 
     let partial_md5 = compute_partial_md5(path).map_err(|e| format!("partial_md5 failed: {e}"))?;
+    let mobi = parse_mobi_safely(path)?;
 
-    let mobi = Mobi::from_path(path).map_err(|e| format!("parse mobi: {e}"))?;
-
-    let cover = extract_cover(&mobi).map(|raw| {
-        let (bytes, mime) = maybe_resize_cover(raw.bytes, &raw.mime);
-        RawCoverImage { bytes, mime }
-    });
+    let cover = match extract_cover(&mobi)? {
+        Some(raw) => {
+            let (bytes, mime) = maybe_resize_cover(raw.bytes, &raw.mime)?;
+            Some(RawCoverImage { bytes, mime })
+        }
+        None => None,
+    };
 
     Ok(ParsedMobi { partial_md5, cover })
+}
+
+fn parse_mobi_safely(path: &Path) -> Result<Mobi, String> {
+    catch_mobi_panic(|| Mobi::from_path(path))?.map_err(|error| format!("parse mobi: {error}"))
+}
+
+fn catch_mobi_panic<T>(work: impl FnOnce() -> T) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+        .map_err(|_| "The book file is corrupted.".to_string())
 }
 
 /// Extract the *original* (un-resized) cover bytes from a MOBI / AZW / AZW3.
@@ -102,10 +115,11 @@ pub async fn extract_mobi_cover_full(file_path: String) -> Result<RawCoverImage,
 fn extract_mobi_cover_full_sync(file_path: &str) -> Result<RawCoverImage, String> {
     let path = Path::new(file_path);
     if !path.is_file() {
-        return Err(format!("file not found: {file_path}"));
+        return Err("The book file could not be found.".to_string());
     }
-    let mobi = Mobi::from_path(path).map_err(|e| format!("parse mobi: {e}"))?;
-    extract_cover(&mobi).ok_or_else(|| "no cover image in mobi".to_string())
+    validate_mobi_file(path)?;
+    let mobi = parse_mobi_safely(path)?;
+    extract_cover(&mobi)?.ok_or_else(|| "no cover image in mobi".to_string())
 }
 
 /// Locate and decode the embedded cover image.
@@ -120,31 +134,17 @@ fn extract_mobi_cover_full_sync(file_path: &str) -> Result<RawCoverImage, String
 ///      MOBI generators almost always place the cover first, and a
 ///      "wrong but plausible" thumbnail is better than no thumbnail.
 ///
-/// Returns `None` when the file has no image records at all (rare for real
-/// Kindle content), or when parsing the (untrusted) file panics.
-///
-/// `mobi::Mobi::image_records()` slices raw record bytes and panics on a
-/// truncated / corrupt file whose PDB record offsets are inverted ("slice index
-/// starts at N but ends at M", READEST-1Q / READEST-10). Left unguarded, that
-/// panic unwinds out of the `spawn_blocking` task and fails the whole import, so
-/// contain it here: a bad cover yields no thumbnail instead of a failed import.
-fn extract_cover(mobi: &Mobi) -> Option<RawCoverImage> {
-    catch_cover_panic(|| extract_cover_inner(mobi))
+/// Returns `Ok(None)` when the file has no image records at all (rare for real
+/// Kindle content). `mobi::Mobi::image_records()` can panic on truncated record
+/// offsets; the outer guard converts that panic into a normal corruption error.
+fn extract_cover(mobi: &Mobi) -> Result<Option<RawCoverImage>, String> {
+    catch_mobi_panic(|| extract_cover_inner(mobi))?
 }
 
-/// Run cover extraction, converting a panic into `None`. Split out so the panic
-/// isolation is unit-testable without a malformed-MOBI fixture.
-fn catch_cover_panic<F>(f: F) -> Option<RawCoverImage>
-where
-    F: FnOnce() -> Option<RawCoverImage>,
-{
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or(None)
-}
-
-fn extract_cover_inner(mobi: &Mobi) -> Option<RawCoverImage> {
+fn extract_cover_inner(mobi: &Mobi) -> Result<Option<RawCoverImage>, String> {
     let images = mobi.image_records();
     if images.is_empty() {
-        return None;
+        return Ok(None);
     }
 
     let first_image_index = mobi.metadata.mobi.first_image_index;
@@ -152,7 +152,7 @@ fn extract_cover_inner(mobi: &Mobi) -> Option<RawCoverImage> {
     let exth_offset = read_exth_u32(mobi, ExthRecord::CoverOffset)
         .or_else(|| read_exth_u32(mobi, ExthRecord::ThumbOffset));
 
-    let bytes: Vec<u8> = if let Some(off) = exth_offset {
+    let selected = if let Some(off) = exth_offset {
         // EXTH stores a *relative* offset; the absolute PDB record id
         // is `first_image_index + off`. `image_records()` is filtered
         // to image-only records, so we have to find the entry whose
@@ -164,18 +164,19 @@ fn extract_cover_inner(mobi: &Mobi) -> Option<RawCoverImage> {
             // Some files store the offset already pre-resolved into
             // image_records()'s ordering; allow that as a fallback.
             .or_else(|| images.get(off as usize))
-            .map(|r| r.content.to_vec())
-            .unwrap_or_else(|| images[0].content.to_vec())
+            .unwrap_or(&images[0])
     } else {
-        images[0].content.to_vec()
+        &images[0]
     };
 
-    if bytes.is_empty() {
-        return None;
+    // Check the borrowed record before cloning it into a second allocation.
+    validate_image_input_size(selected.content.len())?;
+    if selected.content.is_empty() {
+        return Ok(None);
     }
-
+    let bytes = selected.content.to_vec();
     let mime = sniff_image_mime(&bytes).to_string();
-    Some(RawCoverImage { bytes, mime })
+    Ok(Some(RawCoverImage { bytes, mime }))
 }
 
 /// Read the first occurrence of `record` and interpret its payload as
@@ -223,26 +224,56 @@ mod tests {
     use super::*;
 
     #[test]
-    fn catch_cover_panic_swallows_a_slice_index_panic() {
+    fn catch_mobi_panic_converts_slice_panics_to_corruption_errors() {
         // The exact shape the `mobi` crate raises on a corrupt file
         // (READEST-1Q / READEST-10). Silence the backtrace for a clean test log.
         let prev = std::panic::take_hook();
         std::panic::set_hook(Box::new(|_| {}));
-        let cover =
-            catch_cover_panic(|| panic!("slice index starts at 3301038 but ends at 3300924"));
+        let error = catch_mobi_panic(|| -> () {
+            panic!("slice index starts at 3301038 but ends at 3300924")
+        })
+        .unwrap_err();
         std::panic::set_hook(prev);
-        assert!(cover.is_none());
+        assert_eq!(error, "The book file is corrupted.");
     }
 
     #[test]
-    fn catch_cover_panic_passes_through_a_cover() {
-        let cover = catch_cover_panic(|| {
-            Some(RawCoverImage {
-                bytes: vec![0xFF, 0xD8, 0xFF],
-                mime: "image/jpeg".to_string(),
-            })
-        });
-        assert_eq!(cover.map(|c| c.mime), Some("image/jpeg".to_string()));
+    fn catch_mobi_panic_passes_through_success() {
+        assert_eq!(catch_mobi_panic(|| 42).unwrap(), 42);
+    }
+
+    #[test]
+    fn oversized_sparse_mobi_is_rejected_before_parser_allocation() {
+        let path =
+            std::env::temp_dir().join(format!("readest-oversized-mobi-{}", std::process::id()));
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(crate::parser_limits::limits().mobi.max_file_bytes + 1)
+            .unwrap();
+        drop(file);
+
+        let error = parse_mobi_metadata_sync(path.to_str().unwrap()).unwrap_err();
+        assert!(error.contains(crate::parser_limits::RESOURCE_LIMIT_ERROR_CODE));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn malformed_mobi_returns_error_without_panicking() {
+        let path =
+            std::env::temp_dir().join(format!("readest-malformed-mobi-{}", std::process::id()));
+        let mut bytes = vec![0u8; 94];
+        bytes[60..68].copy_from_slice(b"BOOKMOBI");
+        std::fs::write(&path, bytes).unwrap();
+
+        assert!(parse_mobi_metadata_sync(path.to_str().unwrap()).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn normal_mobi_fixture_remains_accepted() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../src/__tests__/fixtures/data/sample-war-peace.mobi");
+        let parsed = parse_mobi_metadata_sync(path.to_str().unwrap()).expect("normal MOBI parses");
+        assert!(!parsed.partial_md5.is_empty());
     }
 
     #[test]
